@@ -2,7 +2,7 @@
 
 CPU flamegraph benchmarks for [Gazebo](https://gazebosim.org). Interactive flamegraphs and reports are published at:
 
-**https://caguero.github.io/gz-profiling-flamegraphs/**
+**https://caguero.github.io/gz-profiling/**
 
 ## Repository Structure
 
