@@ -4,7 +4,7 @@
 # Usage: ./capture_all.sh [--runtime-only] [--loading-only]
 #
 # Prerequisites:
-#   - Workspace built with ENABLE_PROFILER=ON, RelWithDebInfo, -fno-omit-frame-pointer
+#   - Workspace built with ENABLE_PROFILER=OFF, RelWithDebInfo, -fno-omit-frame-pointer
 #   - sudo sysctl kernel.perf_event_paranoid=1
 #   - Assets pre-cached (run each world once beforehand)
 
