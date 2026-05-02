@@ -1,0 +1,2515 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1200" height="622" onload="init(evt)" viewBox="0 0 1200 622" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#eeeeb0" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+		if (currentSearchTerm === null) return;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1200.0" height="622.0" fill="url(#background)"  />
+<text id="title" x="600.00" y="24" >3k_static_rt: CACHE MISSES</text>
+<text id="subtitle" x="600.00" y="48" >Where cache misses happen (not CPU time)</text>
+<text id="details" x="10.00" y="605" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1090.00" y="24" >Search</text>
+<text id="ignorecase" x="1174.00" y="24" >ic</text>
+<text id="matched" x="1090.00" y="605" > </text>
+<g id="frames">
+<g >
+<title>gz::msgs::Clock::~Clock (153,305 cache misses, 0.01%)</title><rect x="330.7" y="413" width="0.1" height="15.0" fill="rgb(236,143,34)" rx="2" ry="2" />
+<text  x="333.66" y="423.5" ></text>
+</g>
+<g >
+<title>dart::collision::CollisionObject::getTransform (28,716,352 cache misses, 2.16%)</title><rect x="609.4" y="237" width="25.5" height="15.0" fill="rgb(243,177,42)" rx="2" ry="2" />
+<text  x="612.35" y="247.5" >d..</text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_drop_node (1,216,136 cache misses, 0.09%)</title><rect x="301.9" y="285" width="1.1" height="15.0" fill="rgb(208,16,3)" rx="2" ry="2" />
+<text  x="304.87" y="295.5" ></text>
+</g>
+<g >
+<title>std::_Hashtable&lt;unsigned long, unsigned long, std::allocator&lt;unsigned long&gt;, std::__detail::_Identity, std::equal_to&lt;unsigned long&gt;, std::hash&lt;unsigned long&gt;, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits&lt;false, true, true&gt; &gt;::clear (2,317,631 cache misses, 0.17%)</title><rect x="10.6" y="397" width="2.1" height="15.0" fill="rgb(254,227,54)" rx="2" ry="2" />
+<text  x="13.62" y="407.5" ></text>
+</g>
+<g >
+<title>malloc@plt (537,550 cache misses, 0.04%)</title><rect x="323.4" y="237" width="0.5" height="15.0" fill="rgb(246,192,46)" rx="2" ry="2" />
+<text  x="326.42" y="247.5" ></text>
+</g>
+<g >
+<title>std::__new_allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::deallocate (1,785,552 cache misses, 0.13%)</title><rect x="309.6" y="189" width="1.6" height="15.0" fill="rgb(230,115,27)" rx="2" ry="2" />
+<text  x="312.61" y="199.5" ></text>
+</g>
+<g >
+<title>tcache_put (4,937,108 cache misses, 0.37%)</title><rect x="59.7" y="221" width="4.4" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="62.67" y="231.5" ></text>
+</g>
+<g >
+<title>std::allocator_traits&lt;std::allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt; &gt;::deallocate (1,107,720 cache misses, 0.08%)</title><rect x="312.6" y="189" width="1.0" height="15.0" fill="rgb(215,50,12)" rx="2" ry="2" />
+<text  x="315.61" y="199.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_put_node (1,674,150 cache misses, 0.13%)</title><rect x="303.7" y="253" width="1.5" height="15.0" fill="rgb(252,220,52)" rx="2" ry="2" />
+<text  x="306.75" y="263.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::copy_using_evaluator_DefaultTraversal_CompleteUnrolling&lt;Eigen::internal::generic_dense_assignment_kernel&lt;Eigen::internal::evaluator&lt;Eigen::Matrix&lt;double, 3, 1, 0, 3, 1&gt; &gt;, Eigen::internal::evaluator&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 1, true&gt; &gt;, Eigen::internal::assign_op&lt;double, double&gt;, 0&gt;, 2, 3&gt;::run (3,831,406 cache misses, 0.29%)</title><rect x="1082.4" y="141" width="3.4" height="15.0" fill="rgb(249,206,49)" rx="2" ry="2" />
+<text  x="1085.38" y="151.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::components::Component&lt;std::add_lvalue_reference&lt;void&gt;, gz::sim::v11::components::WorldTag, gz::sim::v11::serializers::DefaultSerializer&lt;std::add_lvalue_reference&lt;void&gt; &gt; &gt; const* gz::sim::v11::EntityComponentManager::Component&lt;gz::sim::v11::components::Component&lt;std::add_lvalue_reference&lt;void&gt;, gz::sim::v11::components::WorldTag, gz::sim::v11::serializers::DefaultSerializer&lt;std::add_lvalue_reference&lt;void&gt; &gt; &gt; &gt; (124,351 cache misses, 0.01%)</title><rect x="1188.8" y="381" width="0.2" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="1191.84" y="391.5" ></text>
+</g>
+<g >
+<title>dart::constraint::ConstraintSolver::updateConstraints (517,296,564 cache misses, 39.00%)</title><rect x="496.1" y="317" width="460.2" height="15.0" fill="rgb(239,160,38)" rx="2" ry="2" />
+<text  x="499.08" y="327.5" >dart::constraint::ConstraintSolver::updateConstraints</text>
+</g>
+<g >
+<title>Eigen::internal::evaluator&lt;Eigen::Diagonal&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; const, 0&gt; &gt;::coeff (1,318,496 cache misses, 0.10%)</title><rect x="1089.5" y="77" width="1.2" height="15.0" fill="rgb(235,138,33)" rx="2" ry="2" />
+<text  x="1092.48" y="87.5" ></text>
+</g>
+<g >
+<title>CopyMapData&lt;std::_Rb_tree_const_iterator&lt;std::pair&lt;const std::__cxx11::basic_string&lt;char&gt;, gz::physics::CompositeData::DataEntry&gt; &gt;, const std::map&lt;std::__cxx11::basic_string&lt;char&gt;, gz::physics::CompositeData::DataEntry&gt;&amp;&gt; (3,956,048 cache misses, 0.30%)</title><rect x="332.7" y="333" width="3.5" height="15.0" fill="rgb(216,53,12)" rx="2" ry="2" />
+<text  x="335.69" y="343.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::SkeletonRefCountingBase::decrementReferenceCount (2,951,236 cache misses, 0.22%)</title><rect x="773.5" y="205" width="2.7" height="15.0" fill="rgb(217,57,13)" rx="2" ry="2" />
+<text  x="776.54" y="215.5" ></text>
+</g>
+<g >
+<title>std::enable_if&lt;std::is_same&lt;unsigned long, std::iterator_traits&lt;unsigned long const*&gt;::value_type&gt;::value, void&gt;::type std::_Rb_tree&lt;unsigned long, unsigned long, std::_Identity&lt;unsigned long&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::_M_insert_range_unique&lt;unsigned long const*&gt; (7,362,953 cache misses, 0.56%)</title><rect x="317.3" y="381" width="6.6" height="15.0" fill="rgb(217,57,13)" rx="2" ry="2" />
+<text  x="320.35" y="391.5" ></text>
+</g>
+<g >
+<title>__GI___libc_free (9,685,190 cache misses, 0.73%)</title><rect x="828.0" y="253" width="8.6" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="831.02" y="263.5" ></text>
+</g>
+<g >
+<title>void gz::physics::CanWriteRequiredData&lt;gz::physics::dartsim::SimulationFeatures, gz::physics::RequireData&lt;gz::physics::WorldPoses&gt; &gt;::WriteRequiredData&lt;gz::physics::SpecifyData&lt;gz::physics::RequireData&lt;gz::physics::WorldPoses&gt;, gz::physics::ExpectData&lt;gz::physics::ChangedWorldPoses, gz::physics::Contacts, gz::physics::JointPositions&gt; &gt; &gt; (77,021,661 cache misses, 5.81%)</title><rect x="1038.6" y="349" width="68.5" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="1041.57" y="359.5" >void gz..</text>
+</g>
+<g >
+<title>__GI___libc_malloc (1,767,118 cache misses, 0.13%)</title><rect x="408.4" y="317" width="1.5" height="15.0" fill="rgb(219,68,16)" rx="2" ry="2" />
+<text  x="411.37" y="327.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::LevelManager::UpdateLevelsState (293,562 cache misses, 0.02%)</title><rect x="12.8" y="429" width="0.2" height="15.0" fill="rgb(211,28,6)" rx="2" ry="2" />
+<text  x="15.75" y="439.5" ></text>
+</g>
+<g >
+<title>__GI___libc_free (1,725,694 cache misses, 0.13%)</title><rect x="309.6" y="173" width="1.6" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="312.62" y="183.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::BodyNode::clearConstraintImpulse (153,498 cache misses, 0.01%)</title><rect x="1189.8" y="525" width="0.2" height="15.0" fill="rgb(232,126,30)" rx="2" ry="2" />
+<text  x="1192.84" y="535.5" ></text>
+</g>
+<g >
+<title>gz::physics::dartsim::BitmaskContactFilter::ignoresCollision (86,879,114 cache misses, 6.55%)</title><rect x="699.6" y="237" width="77.3" height="15.0" fill="rgb(212,35,8)" rx="2" ry="2" />
+<text  x="702.57" y="247.5" >gz::phys..</text>
+</g>
+<g >
+<title>std::__new_allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::deallocate (202,538 cache misses, 0.02%)</title><rect x="300.9" y="269" width="0.1" height="15.0" fill="rgb(230,115,27)" rx="2" ry="2" />
+<text  x="303.86" y="279.5" ></text>
+</g>
+<g >
+<title>Eigen::BlockImpl&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false, Eigen::Dense&gt;::BlockImpl (624,255 cache misses, 0.05%)</title><rect x="1090.8" y="221" width="0.6" height="15.0" fill="rgb(206,7,1)" rx="2" ry="2" />
+<text  x="1093.80" y="231.5" ></text>
+</g>
+<g >
+<title>dart::collision::CollisionObject::getShapeFrame (353,122 cache misses, 0.03%)</title><rect x="776.3" y="221" width="0.3" height="15.0" fill="rgb(236,146,35)" rx="2" ry="2" />
+<text  x="779.32" y="231.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::SimulationRunner::Step (1,324,531,948 cache misses, 99.86%)</title><rect x="10.2" y="445" width="1178.3" height="15.0" fill="rgb(231,119,28)" rx="2" ry="2" />
+<text  x="13.19" y="455.5" >gz::sim::v11::SimulationRunner::Step</text>
+</g>
+<g >
+<title>std::set&lt;unsigned long, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::begin (6,121,918 cache misses, 0.46%)</title><rect x="80.3" y="381" width="5.5" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="83.33" y="391.5" ></text>
+</g>
+<g >
+<title>[unknown] (122,918 cache misses, 0.01%)</title><rect x="331.9" y="317" width="0.2" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="334.95" y="327.5" ></text>
+</g>
+<g >
+<title>std::function&lt;bool  (26,434,118 cache misses, 1.99%)</title><rect x="1162.9" y="333" width="23.5" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="1165.87" y="343.5" >s..</text>
+</g>
+<g >
+<title>__GI___libc_malloc (17,862,971 cache misses, 1.35%)</title><rect x="895.8" y="237" width="15.9" height="15.0" fill="rgb(219,68,16)" rx="2" ry="2" />
+<text  x="898.81" y="247.5" ></text>
+</g>
+<g >
+<title>gz::math::eigen3::convert (14,380,977 cache misses, 1.08%)</title><rect x="1082.4" y="269" width="12.8" height="15.0" fill="rgb(253,224,53)" rx="2" ry="2" />
+<text  x="1085.38" y="279.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt;, std::pair&lt;std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt; const, void*&gt;, std::_Select1st&lt;std::pair&lt;std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt; const, void*&gt; &gt;, std::less&lt;std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt; &gt;, std::allocator&lt;std::pair&lt;std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt; const, void*&gt; &gt; &gt;::find (121,603 cache misses, 0.01%)</title><rect x="1186.2" y="205" width="0.1" height="15.0" fill="rgb(212,35,8)" rx="2" ry="2" />
+<text  x="1189.22" y="215.5" ></text>
+</g>
+<g >
+<title>operator new (156,514 cache misses, 0.01%)</title><rect x="1152.5" y="205" width="0.1" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="1155.47" y="215.5" ></text>
+</g>
+<g >
+<title>std::_Hashtable&lt;unsigned long, std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, std::allocator&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt; &gt;, std::__detail::_Select1st, std::equal_to&lt;unsigned long&gt;, std::hash&lt;unsigned long&gt;, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits&lt;false, false, true&gt; &gt;::_M_rehash_aux (1,119,500 cache misses, 0.08%)</title><rect x="1151.8" y="285" width="1.0" height="15.0" fill="rgb(229,114,27)" rx="2" ry="2" />
+<text  x="1154.83" y="295.5" ></text>
+</g>
+<g >
+<title>Eigen::Quaternion&lt;double, 0&gt;&amp; Eigen::QuaternionBase&lt;Eigen::Quaternion&lt;double, 0&gt; &gt;::operator=&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; &gt; (5,633,889 cache misses, 0.42%)</title><rect x="1085.8" y="237" width="5.0" height="15.0" fill="rgb(250,209,50)" rx="2" ry="2" />
+<text  x="1088.79" y="247.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::redux_evaluator&lt;Eigen::Diagonal&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; const, 0&gt; &gt;::coeffByOuterInner (1,820,990 cache misses, 0.14%)</title><rect x="1142.5" y="173" width="1.7" height="15.0" fill="rgb(211,29,7)" rx="2" ry="2" />
+<text  x="1145.53" y="183.5" ></text>
+</g>
+<g >
+<title>[unknown] (122,918 cache misses, 0.01%)</title><rect x="331.9" y="285" width="0.2" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="334.95" y="295.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::redux_novec_unroller&lt;Eigen::internal::scalar_sum_op&lt;double, double&gt;, Eigen::internal::redux_evaluator&lt;Eigen::Diagonal&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; const, 0&gt; &gt;, 1, 2&gt;::run (1,391,461 cache misses, 0.10%)</title><rect x="1089.5" y="125" width="1.2" height="15.0" fill="rgb(250,207,49)" rx="2" ry="2" />
+<text  x="1092.48" y="135.5" ></text>
+</g>
+<g >
+<title>std::__new_allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::deallocate (1,674,150 cache misses, 0.13%)</title><rect x="303.7" y="221" width="1.5" height="15.0" fill="rgb(230,115,27)" rx="2" ry="2" />
+<text  x="306.75" y="231.5" ></text>
+</g>
+<g >
+<title>void Eigen::internal::quaternionbase_assign_impl&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt;, 3, 3&gt;::run&lt;Eigen::Quaternion&lt;double, 0&gt; &gt; (5,594,366 cache misses, 0.42%)</title><rect x="1085.8" y="221" width="5.0" height="15.0" fill="rgb(239,158,37)" rx="2" ry="2" />
+<text  x="1088.82" y="231.5" ></text>
+</g>
+<g >
+<title>operator new (54,613,842 cache misses, 4.12%)</title><rect x="779.4" y="237" width="48.6" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="782.39" y="247.5" >oper..</text>
+</g>
+<g >
+<title>Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt;::operator= (2,837,621 cache misses, 0.21%)</title><rect x="1036.0" y="333" width="2.6" height="15.0" fill="rgb(243,178,42)" rx="2" ry="2" />
+<text  x="1039.05" y="343.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::Joint::areLimitsEnforced (319,235 cache misses, 0.02%)</title><rect x="925.0" y="301" width="0.3" height="15.0" fill="rgb(228,106,25)" rx="2" ry="2" />
+<text  x="928.03" y="311.5" ></text>
+</g>
+<g >
+<title>_int_free (1,292,351 cache misses, 0.10%)</title><rect x="310.0" y="157" width="1.2" height="15.0" fill="rgb(247,196,46)" rx="2" ry="2" />
+<text  x="313.01" y="167.5" ></text>
+</g>
+<g >
+<title>void Eigen::internal::resize_if_allowed&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt;, Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt;, double, double&gt; (841,329 cache misses, 0.06%)</title><rect x="1037.8" y="221" width="0.8" height="15.0" fill="rgb(218,63,15)" rx="2" ry="2" />
+<text  x="1040.82" y="231.5" ></text>
+</g>
+<g >
+<title>Eigen::BlockImpl&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false, Eigen::Dense&gt;::BlockImpl (3,406,982 cache misses, 0.26%)</title><rect x="1144.3" y="301" width="3.0" height="15.0" fill="rgb(206,7,1)" rx="2" ry="2" />
+<text  x="1147.26" y="311.5" ></text>
+</g>
+<g >
+<title>dxCylinder::computeAABB (2,613,088 cache misses, 0.20%)</title><rect x="862.0" y="237" width="2.3" height="15.0" fill="rgb(222,82,19)" rx="2" ry="2" />
+<text  x="864.98" y="247.5" ></text>
+</g>
+<g >
+<title>PyGILState_Check (198,553 cache misses, 0.01%)</title><rect x="332.3" y="397" width="0.2" height="15.0" fill="rgb(228,108,25)" rx="2" ry="2" />
+<text  x="335.28" y="407.5" ></text>
+</g>
+<g >
+<title>_int_free (305,790 cache misses, 0.02%)</title><rect x="301.2" y="221" width="0.3" height="15.0" fill="rgb(247,196,46)" rx="2" ry="2" />
+<text  x="304.23" y="231.5" ></text>
+</g>
+<g >
+<title>[unknown] (197,529 cache misses, 0.01%)</title><rect x="332.1" y="189" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="335.07" y="199.5" ></text>
+</g>
+<g >
+<title>[unknown] (176,940 cache misses, 0.01%)</title><rect x="332.1" y="141" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="335.09" y="151.5" ></text>
+</g>
+<g >
+<title>malloc_consolidate (178,838 cache misses, 0.01%)</title><rect x="336.0" y="237" width="0.2" height="15.0" fill="rgb(239,159,38)" rx="2" ry="2" />
+<text  x="339.01" y="247.5" ></text>
+</g>
+<g >
+<title>Eigen::DenseBase&lt;Eigen::Diagonal&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; const, 0&gt; &gt;::sum (2,025,845 cache misses, 0.15%)</title><rect x="1142.5" y="269" width="1.8" height="15.0" fill="rgb(248,200,48)" rx="2" ry="2" />
+<text  x="1145.45" y="279.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::Joint::isKinematic (113,035 cache misses, 0.01%)</title><rect x="1189.7" y="525" width="0.1" height="15.0" fill="rgb(249,203,48)" rx="2" ry="2" />
+<text  x="1192.74" y="535.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_put_node (286,047 cache misses, 0.02%)</title><rect x="315.7" y="173" width="0.3" height="15.0" fill="rgb(252,220,52)" rx="2" ry="2" />
+<text  x="318.73" y="183.5" ></text>
+</g>
+<g >
+<title>dart::collision::CollisionGroup::update (38,673,787 cache misses, 2.92%)</title><rect x="536.9" y="285" width="34.4" height="15.0" fill="rgb(210,26,6)" rx="2" ry="2" />
+<text  x="539.93" y="295.5" >da..</text>
+</g>
+<g >
+<title>dart::simulation::World::step (605,099,203 cache misses, 45.62%)</title><rect x="494.3" y="349" width="538.3" height="15.0" fill="rgb(219,65,15)" rx="2" ry="2" />
+<text  x="497.30" y="359.5" >dart::simulation::World::step</text>
+</g>
+<g >
+<title>__memcpy_avx_unaligned_erms (1,735,535 cache misses, 0.13%)</title><rect x="777.6" y="237" width="1.5" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="780.59" y="247.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_erase (15,334,921 cache misses, 1.16%)</title><rect x="303.0" y="285" width="13.6" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="305.95" y="295.5" ></text>
+</g>
+<g >
+<title>void Eigen::internal::call_assignment&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt;, Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt;, Eigen::internal::assign_op&lt;double, double&gt; &gt; (2,837,621 cache misses, 0.21%)</title><rect x="1036.0" y="285" width="2.6" height="15.0" fill="rgb(253,220,52)" rx="2" ry="2" />
+<text  x="1039.05" y="295.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::Frame::getWorldTransform (36,740,945 cache misses, 2.77%)</title><rect x="635.3" y="237" width="32.6" height="15.0" fill="rgb(253,224,53)" rx="2" ry="2" />
+<text  x="638.26" y="247.5" >da..</text>
+</g>
+<g >
+<title>___pthread_cond_wait (223,727 cache misses, 0.02%)</title><rect x="332.1" y="397" width="0.2" height="15.0" fill="rgb(252,219,52)" rx="2" ry="2" />
+<text  x="335.06" y="407.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::Joint::getActuatorType (628,508 cache misses, 0.05%)</title><rect x="925.3" y="301" width="0.6" height="15.0" fill="rgb(232,127,30)" rx="2" ry="2" />
+<text  x="928.31" y="311.5" ></text>
+</g>
+<g >
+<title>[unknown] (185,055 cache misses, 0.01%)</title><rect x="299.7" y="333" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="302.68" y="343.5" ></text>
+</g>
+<g >
+<title>void Eigen::internal::call_dense_assignment_loop&lt;Eigen::Matrix&lt;double, 3, 1, 0, 3, 1&gt;, Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 1, true&gt;, Eigen::internal::assign_op&lt;double, double&gt; &gt; (3,831,406 cache misses, 0.29%)</title><rect x="1082.4" y="173" width="3.4" height="15.0" fill="rgb(234,136,32)" rx="2" ry="2" />
+<text  x="1085.38" y="183.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::EntityComponentManager::EntityMatches (247,054,498 cache misses, 18.63%)</title><rect x="80.1" y="397" width="219.7" height="15.0" fill="rgb(249,202,48)" rx="2" ry="2" />
+<text  x="83.06" y="407.5" >gz::sim::v11::EntityComponent..</text>
+</g>
+<g >
+<title>std::_Rb_tree_node&lt;unsigned long&gt;* std::_Rb_tree&lt;unsigned long, unsigned long, std::_Identity&lt;unsigned long&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::_M_create_node&lt;unsigned long const&amp;&gt; (3,773,172 cache misses, 0.28%)</title><rect x="320.5" y="317" width="3.4" height="15.0" fill="rgb(252,219,52)" rx="2" ry="2" />
+<text  x="323.54" y="327.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::systems::Physics::Update (961,956,802 cache misses, 72.52%)</title><rect x="332.5" y="413" width="855.8" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="335.49" y="423.5" >gz::sim::v11::systems::Physics::Update</text>
+</g>
+<g >
+<title>_int_free (148,545 cache misses, 0.01%)</title><rect x="300.9" y="237" width="0.1" height="15.0" fill="rgb(247,196,46)" rx="2" ry="2" />
+<text  x="303.91" y="247.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::BodyNode::isCollidable (1,607,497 cache misses, 0.12%)</title><rect x="741.3" y="205" width="1.4" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text  x="744.28" y="215.5" ></text>
+</g>
+<g >
+<title>dart::constraint::ConstraintSolver::updateConstraints (113,035 cache misses, 0.01%)</title><rect x="1189.7" y="541" width="0.1" height="15.0" fill="rgb(239,160,38)" rx="2" ry="2" />
+<text  x="1192.74" y="551.5" ></text>
+</g>
+<g >
+<title>std::_Function_handler&lt;bool  (196,143 cache misses, 0.01%)</title><rect x="1187.1" y="349" width="0.2" height="15.0" fill="rgb(234,135,32)" rx="2" ry="2" />
+<text  x="1190.15" y="359.5" ></text>
+</g>
+<g >
+<title>_int_free (7,381,926 cache misses, 0.56%)</title><rect x="830.1" y="237" width="6.5" height="15.0" fill="rgb(247,196,46)" rx="2" ry="2" />
+<text  x="833.06" y="247.5" ></text>
+</g>
+<g >
+<title>clone3 (376,076 cache misses, 0.03%)</title><rect x="1189.0" y="541" width="0.3" height="15.0" fill="rgb(216,54,12)" rx="2" ry="2" />
+<text  x="1191.97" y="551.5" ></text>
+</g>
+<g >
+<title>void gz::physics::OperateOnSpecifiedData&lt;gz::physics::RequireData&lt;gz::physics::WorldPoses&gt;, gz::physics::FindRequired, gz::physics::detail::WriteDataOperation, gz::physics::dartsim::SimulationFeatures const&gt;::SubOperate&lt;gz::physics::WorldPoses, gz::physics::RequireData&lt;gz::physics::WorldPoses&gt;, gz::physics::SpecifyData&lt;gz::physics::RequireData&lt;gz::physics::WorldPoses&gt;, gz::physics::ExpectData&lt;gz::physics::ChangedWorldPoses, gz::physics::Contacts, gz::physics::JointPositions&gt; &gt; &gt; (76,851,093 cache misses, 5.79%)</title><rect x="1038.7" y="317" width="68.4" height="15.0" fill="rgb(215,49,11)" rx="2" ry="2" />
+<text  x="1041.72" y="327.5" >void gz..</text>
+</g>
+<g >
+<title>void Eigen::internal::quaternionbase_assign_impl&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt;, 3, 3&gt;::run&lt;Eigen::Quaternion&lt;double, 0&gt; &gt; (4,888,350 cache misses, 0.37%)</title><rect x="1139.9" y="301" width="4.4" height="15.0" fill="rgb(239,158,37)" rx="2" ry="2" />
+<text  x="1142.91" y="311.5" ></text>
+</g>
+<g >
+<title>_int_malloc (4,360,941 cache misses, 0.33%)</title><rect x="1158.6" y="221" width="3.8" height="15.0" fill="rgb(215,47,11)" rx="2" ry="2" />
+<text  x="1161.56" y="231.5" ></text>
+</g>
+<g >
+<title>__GI___libc_free (286,047 cache misses, 0.02%)</title><rect x="315.7" y="125" width="0.3" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="318.73" y="135.5" ></text>
+</g>
+<g >
+<title>[libdart.so.6.13.2] (844,741 cache misses, 0.06%)</title><rect x="1028.7" y="285" width="0.8" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="1031.72" y="295.5" ></text>
+</g>
+<g >
+<title>[libdart-collision-ode.so.6.13.2] (87,106,634 cache misses, 6.57%)</title><rect x="699.4" y="253" width="77.5" height="15.0" fill="rgb(215,47,11)" rx="2" ry="2" />
+<text  x="702.37" y="263.5" >[libdart..</text>
+</g>
+<g >
+<title>dxSpace::dirty (983,409 cache misses, 0.07%)</title><rect x="596.5" y="205" width="0.8" height="15.0" fill="rgb(223,83,19)" rx="2" ry="2" />
+<text  x="599.47" y="215.5" ></text>
+</g>
+<g >
+<title>dart::collision::detail::OdeGeom::updateEngineData (404,483 cache misses, 0.03%)</title><rect x="634.9" y="237" width="0.4" height="15.0" fill="rgb(228,109,26)" rx="2" ry="2" />
+<text  x="637.90" y="247.5" ></text>
+</g>
+<g >
+<title>[unknown] (214,609 cache misses, 0.02%)</title><rect x="332.1" y="269" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="335.06" y="279.5" ></text>
+</g>
+<g >
+<title>gz::physics::WorldPose* std::__uninitialized_copy_a&lt;__gnu_cxx::__normal_iterator&lt;gz::physics::WorldPose const*, std::vector&lt;gz::physics::WorldPose, std::allocator&lt;gz::physics::WorldPose&gt; &gt; &gt;, gz::physics::WorldPose*, gz::physics::WorldPose&gt; (3,602,457 cache misses, 0.27%)</title><rect x="332.8" y="237" width="3.2" height="15.0" fill="rgb(208,14,3)" rx="2" ry="2" />
+<text  x="335.79" y="247.5" ></text>
+</g>
+<g >
+<title>std::__detail::_Hashtable_alloc&lt;std::allocator&lt;std::__detail::_Hash_node&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, false&gt; &gt; &gt;::_M_allocate_buckets (338,862 cache misses, 0.03%)</title><rect x="1152.3" y="253" width="0.3" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="1155.30" y="263.5" ></text>
+</g>
+<g >
+<title>bool gz::math::v10::equal&lt;double&gt; (863,911 cache misses, 0.07%)</title><rect x="1149.0" y="333" width="0.8" height="15.0" fill="rgb(247,193,46)" rx="2" ry="2" />
+<text  x="1151.99" y="343.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_erase (407,176 cache misses, 0.03%)</title><rect x="316.0" y="189" width="0.3" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="318.99" y="199.5" ></text>
+</g>
+<g >
+<title>dart::collision::GzOdeCollisionDetector::collide (382,687,107 cache misses, 28.85%)</title><rect x="571.4" y="301" width="340.5" height="15.0" fill="rgb(235,141,33)" rx="2" ry="2" />
+<text  x="574.43" y="311.5" >dart::collision::GzOdeCollisionDetector::collide</text>
+</g>
+<g >
+<title>gz::sim::v11::ServerPrivate::Run (1,325,066,450 cache misses, 99.90%)</title><rect x="10.1" y="477" width="1178.9" height="15.0" fill="rgb(247,195,46)" rx="2" ry="2" />
+<text  x="13.15" y="487.5" >gz::sim::v11::ServerPrivate::Run</text>
+</g>
+<g >
+<title>std::__detail::_Hashtable_alloc&lt;std::allocator&lt;std::__detail::_Hash_node&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, false&gt; &gt; &gt;::_M_deallocate_nodes (1,184,779 cache misses, 0.09%)</title><rect x="1149.8" y="301" width="1.1" height="15.0" fill="rgb(243,176,42)" rx="2" ry="2" />
+<text  x="1152.80" y="311.5" ></text>
+</g>
+<g >
+<title>gz::plugin::Plugin::PrivateQueryInterface (133,784 cache misses, 0.01%)</title><rect x="1186.2" y="237" width="0.1" height="15.0" fill="rgb(236,145,34)" rx="2" ry="2" />
+<text  x="1189.21" y="247.5" ></text>
+</g>
+<g >
+<title>bool gz::sim::v11::detail::applyFunction&lt;gz::sim::v11::components::Component&lt;gz::math::v10::Vector3&lt;double&gt;, gz::sim::v11::components::GravityTag, gz::sim::v11::serializers::DefaultSerializer&lt;gz::math::v10::Vector3&lt;double&gt; &gt; &gt;, std::function&lt;bool  (26,434,118 cache misses, 1.99%)</title><rect x="1162.9" y="365" width="23.5" height="15.0" fill="rgb(222,82,19)" rx="2" ry="2" />
+<text  x="1165.87" y="375.5" >b..</text>
+</g>
+<g >
+<title>std::map&lt;unsigned long, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::~map (17,789,037 cache misses, 1.34%)</title><rect x="300.8" y="397" width="15.8" height="15.0" fill="rgb(254,226,54)" rx="2" ry="2" />
+<text  x="303.79" y="407.5" ></text>
+</g>
+<g >
+<title>__futex_abstimed_wait_common64 (214,609 cache misses, 0.02%)</title><rect x="332.1" y="333" width="0.1" height="15.0" fill="rgb(220,71,17)" rx="2" ry="2" />
+<text  x="335.06" y="343.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::BodyNode::getParentJoint (14,776,121 cache misses, 1.11%)</title><rect x="911.9" y="301" width="13.1" height="15.0" fill="rgb(244,181,43)" rx="2" ry="2" />
+<text  x="914.88" y="311.5" ></text>
+</g>
+<g >
+<title>std::_Hashtable&lt;unsigned long, std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, std::allocator&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt; &gt;, std::__detail::_Select1st, std::equal_to&lt;unsigned long&gt;, std::hash&lt;unsigned long&gt;, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits&lt;false, false, true&gt; &gt;::_M_insert_unique_node (1,768,740 cache misses, 0.13%)</title><rect x="1151.4" y="317" width="1.6" height="15.0" fill="rgb(246,192,46)" rx="2" ry="2" />
+<text  x="1154.44" y="327.5" ></text>
+</g>
+<g >
+<title>std::abs (121,940 cache misses, 0.01%)</title><rect x="1148.3" y="317" width="0.1" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="1151.32" y="327.5" ></text>
+</g>
+<g >
+<title>std::__new_allocator&lt;std::_Rb_tree_node&lt;unsigned long&gt; &gt;::deallocate (6,789,546 cache misses, 0.51%)</title><rect x="323.9" y="301" width="6.0" height="15.0" fill="rgb(240,161,38)" rx="2" ry="2" />
+<text  x="326.90" y="311.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::Skeleton::clearConstraintImpulses (81,051,760 cache misses, 6.11%)</title><rect x="957.4" y="317" width="72.1" height="15.0" fill="rgb(223,82,19)" rx="2" ry="2" />
+<text  x="960.37" y="327.5" >dart::dy..</text>
+</g>
+<g >
+<title>Eigen::internal::generic_dense_assignment_kernel&lt;Eigen::internal::evaluator&lt;Eigen::Matrix&lt;double, 3, 1, 0, 3, 1&gt; &gt;, Eigen::internal::evaluator&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 1, true&gt; &gt;, Eigen::internal::assign_op&lt;double, double&gt;, 0&gt;::assignCoeff (3,831,406 cache misses, 0.29%)</title><rect x="1082.4" y="109" width="3.4" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="1085.38" y="119.5" ></text>
+</g>
+<g >
+<title>gz::msgs::Clock::~Clock (124,780 cache misses, 0.01%)</title><rect x="330.7" y="397" width="0.1" height="15.0" fill="rgb(236,143,34)" rx="2" ry="2" />
+<text  x="333.68" y="407.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_drop_node (1,107,720 cache misses, 0.08%)</title><rect x="312.6" y="221" width="1.0" height="15.0" fill="rgb(208,16,3)" rx="2" ry="2" />
+<text  x="315.61" y="231.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::scalar_cmp_op&lt;double, double,  (176,244 cache misses, 0.01%)</title><rect x="375.7" y="301" width="0.2" height="15.0" fill="rgb(222,78,18)" rx="2" ry="2" />
+<text  x="378.70" y="311.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree_insert_and_rebalance (922,205 cache misses, 0.07%)</title><rect x="319.7" y="333" width="0.8" height="15.0" fill="rgb(225,94,22)" rx="2" ry="2" />
+<text  x="322.72" y="343.5" ></text>
+</g>
+<g >
+<title>gz::physics::ForwardStep::World&lt;gz::physics::FeaturePolicy&lt;double, 3ul&gt;, gz::sim::v11::systems::PhysicsPrivate::MinimumFeatureList&gt;::Step (927,983,772 cache misses, 69.96%)</title><rect x="337.0" y="381" width="825.5" height="15.0" fill="rgb(236,142,34)" rx="2" ry="2" />
+<text  x="339.95" y="391.5" >gz::physics::ForwardStep::World&lt;gz::physics::FeaturePolicy&lt;double, 3ul&gt;, gz::sim::v11::systems::PhysicsPrivate::Mi..</text>
+</g>
+<g >
+<title>main (1,325,066,450 cache misses, 99.90%)</title><rect x="10.1" y="493" width="1178.9" height="15.0" fill="rgb(243,179,42)" rx="2" ry="2" />
+<text  x="13.15" y="503.5" >main</text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_get_node (25,877,342 cache misses, 1.95%)</title><rect x="41.7" y="317" width="23.0" height="15.0" fill="rgb(214,43,10)" rx="2" ry="2" />
+<text  x="44.67" y="327.5" >s..</text>
+</g>
+<g >
+<title>dart::collision::BodyNodeCollisionFilter::ignoresCollision (80,033,808 cache misses, 6.03%)</title><rect x="705.1" y="221" width="71.2" height="15.0" fill="rgb(223,86,20)" rx="2" ry="2" />
+<text  x="708.12" y="231.5" >dart::co..</text>
+</g>
+<g >
+<title>auto gz::sim::v11::EntityComponentManager::EntityByComponents&lt;gz::sim::v11::components::Component&lt;std::add_lvalue_reference&lt;void&gt;, gz::sim::v11::components::WorldTag, gz::sim::v11::serializers::DefaultSerializer&lt;std::add_lvalue_reference&lt;void&gt; &gt; &gt; &gt; (124,351 cache misses, 0.01%)</title><rect x="1188.8" y="397" width="0.2" height="15.0" fill="rgb(214,44,10)" rx="2" ry="2" />
+<text  x="1191.84" y="407.5" ></text>
+</g>
+<g >
+<title>__ldexp (567,874 cache misses, 0.04%)</title><rect x="837.2" y="237" width="0.5" height="15.0" fill="rgb(241,167,40)" rx="2" ry="2" />
+<text  x="840.19" y="247.5" ></text>
+</g>
+<g >
+<title>gz::math::v10::Vector3&lt;double&gt;::Equal (1,497,959 cache misses, 0.11%)</title><rect x="1148.4" y="349" width="1.4" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="1151.43" y="359.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_drop_node (286,047 cache misses, 0.02%)</title><rect x="315.7" y="189" width="0.3" height="15.0" fill="rgb(208,16,3)" rx="2" ry="2" />
+<text  x="318.73" y="199.5" ></text>
+</g>
+<g >
+<title>gz::physics::RequireData&lt;gz::physics::WorldPoses&gt;::operator= (3,989,358 cache misses, 0.30%)</title><rect x="332.7" y="381" width="3.5" height="15.0" fill="rgb(249,205,49)" rx="2" ry="2" />
+<text  x="335.66" y="391.5" ></text>
+</g>
+<g >
+<title>std::vector&lt;gz::physics::WorldPose, std::allocator&lt;gz::physics::WorldPose&gt; &gt;::push_back (2,686,227 cache misses, 0.20%)</title><rect x="1095.6" y="269" width="2.4" height="15.0" fill="rgb(209,22,5)" rx="2" ry="2" />
+<text  x="1098.56" y="279.5" ></text>
+</g>
+<g >
+<title>[unknown] (197,529 cache misses, 0.01%)</title><rect x="332.1" y="221" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="335.07" y="231.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::MetaSkeleton::getPositions (131,981,118 cache misses, 9.95%)</title><rect x="376.9" y="349" width="117.4" height="15.0" fill="rgb(224,89,21)" rx="2" ry="2" />
+<text  x="379.88" y="359.5" >dart::dynamics..</text>
+</g>
+<g >
+<title>std::__new_allocator&lt;std::__detail::_Hash_node&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, false&gt; &gt;::deallocate (1,184,779 cache misses, 0.09%)</title><rect x="1149.8" y="237" width="1.1" height="15.0" fill="rgb(208,17,4)" rx="2" ry="2" />
+<text  x="1152.80" y="247.5" ></text>
+</g>
+<g >
+<title>tcache_get (1,060,857 cache misses, 0.08%)</title><rect x="409.0" y="301" width="0.9" height="15.0" fill="rgb(253,222,53)" rx="2" ry="2" />
+<text  x="412.00" y="311.5" ></text>
+</g>
+<g >
+<title>void Eigen::internal::pstoret&lt;double, double __vector (1,158,172 cache misses, 0.09%)</title><rect x="1036.8" y="173" width="1.0" height="15.0" fill="rgb(245,185,44)" rx="2" ry="2" />
+<text  x="1039.78" y="183.5" ></text>
+</g>
+<g >
+<title>std::__detail::_Hashtable_alloc&lt;std::allocator&lt;std::__detail::_Hash_node&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, false&gt; &gt; &gt;::_M_deallocate_node_ptr (1,184,779 cache misses, 0.09%)</title><rect x="1149.8" y="269" width="1.1" height="15.0" fill="rgb(213,37,9)" rx="2" ry="2" />
+<text  x="1152.80" y="279.5" ></text>
+</g>
+<g >
+<title>__GI___libc_free (2,032,320 cache misses, 0.15%)</title><rect x="306.3" y="189" width="1.8" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="309.34" y="199.5" ></text>
+</g>
+<g >
+<title>void gz::sim::v11::EntityComponentManager::Each&lt;gz::sim::v11::components::Component&lt;gz::math::v10::Vector3&lt;double&gt;, gz::sim::v11::components::GravityTag, gz::sim::v11::serializers::DefaultSerializer&lt;gz::math::v10::Vector3&lt;double&gt; &gt; &gt; &gt; (26,557,909 cache misses, 2.00%)</title><rect x="1162.8" y="381" width="23.6" height="15.0" fill="rgb(219,68,16)" rx="2" ry="2" />
+<text  x="1165.82" y="391.5" >v..</text>
+</g>
+<g >
+<title>__GI___futex_abstimed_wait_cancelable64 (214,609 cache misses, 0.02%)</title><rect x="332.1" y="365" width="0.1" height="15.0" fill="rgb(215,48,11)" rx="2" ry="2" />
+<text  x="335.06" y="375.5" ></text>
+</g>
+<g >
+<title>Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt;&amp; Eigen::PlainObjectBase&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt; &gt;::_set&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt; &gt; (2,837,621 cache misses, 0.21%)</title><rect x="1036.0" y="317" width="2.6" height="15.0" fill="rgb(211,31,7)" rx="2" ry="2" />
+<text  x="1039.05" y="327.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::SimulationRunner::UpdateSystems (218,790 cache misses, 0.02%)</title><rect x="332.3" y="413" width="0.2" height="15.0" fill="rgb(236,142,34)" rx="2" ry="2" />
+<text  x="335.28" y="423.5" ></text>
+</g>
+<g >
+<title>_int_free (1,299,892 cache misses, 0.10%)</title><rect x="304.1" y="189" width="1.1" height="15.0" fill="rgb(247,196,46)" rx="2" ry="2" />
+<text  x="307.07" y="199.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::systems::PhysicsPrivate::CreateModelEntities (112,438 cache misses, 0.01%)</title><rect x="336.6" y="381" width="0.1" height="15.0" fill="rgb(212,36,8)" rx="2" ry="2" />
+<text  x="339.59" y="391.5" ></text>
+</g>
+<g >
+<title>Eigen::DenseStorage&lt;double, -1, -1, 1, 0&gt;::~DenseStorage (1,117,220 cache misses, 0.08%)</title><rect x="375.9" y="317" width="1.0" height="15.0" fill="rgb(241,167,39)" rx="2" ry="2" />
+<text  x="378.86" y="327.5" ></text>
+</g>
+<g >
+<title>std::abs (174,883 cache misses, 0.01%)</title><rect x="1149.6" y="317" width="0.2" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="1152.61" y="327.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::dense_assignment_loop&lt;Eigen::internal::generic_dense_assignment_kernel&lt;Eigen::internal::evaluator&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt; &gt;, Eigen::internal::evaluator&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt; &gt;, Eigen::internal::assign_op&lt;double, double&gt;, 0&gt;, 3, 0&gt;::run (1,996,292 cache misses, 0.15%)</title><rect x="1036.0" y="221" width="1.8" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="1039.05" y="231.5" ></text>
+</g>
+<g >
+<title>dxSphere::computeAABB (1,239,108 cache misses, 0.09%)</title><rect x="894.3" y="237" width="1.1" height="15.0" fill="rgb(235,142,33)" rx="2" ry="2" />
+<text  x="897.26" y="247.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::redux_evaluator&lt;Eigen::Diagonal&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; const, 0&gt; &gt;::coeffByOuterInner (1,318,496 cache misses, 0.10%)</title><rect x="1089.5" y="93" width="1.2" height="15.0" fill="rgb(211,29,7)" rx="2" ry="2" />
+<text  x="1092.48" y="103.5" ></text>
+</g>
+<g >
+<title>Eigen::Matrix&lt;double, 3, 1, 0, 3, 1&gt;::Matrix&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 1, true&gt; &gt; (3,831,406 cache misses, 0.29%)</title><rect x="1082.4" y="253" width="3.4" height="15.0" fill="rgb(239,160,38)" rx="2" ry="2" />
+<text  x="1085.38" y="263.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::SimulationRunner::ProcessRecreateEntitiesRemove (356,874,842 cache misses, 26.91%)</title><rect x="13.1" y="429" width="317.5" height="15.0" fill="rgb(230,117,28)" rx="2" ry="2" />
+<text  x="16.11" y="439.5" >gz::sim::v11::SimulationRunner::ProcessRec..</text>
+</g>
+<g >
+<title>std::_Hashtable&lt;unsigned long, std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, std::allocator&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt; &gt;, std::__detail::_Select1st, std::equal_to&lt;unsigned long&gt;, std::hash&lt;unsigned long&gt;, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits&lt;false, false, true&gt; &gt;::_M_move_assign (1,184,779 cache misses, 0.09%)</title><rect x="1149.8" y="317" width="1.1" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="1152.80" y="327.5" ></text>
+</g>
+<g >
+<title>tcache_put (1,029,503 cache misses, 0.08%)</title><rect x="328.4" y="253" width="0.9" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="331.40" y="263.5" ></text>
+</g>
+<g >
+<title>[libdart.so.6.13.2] (3,879,158 cache misses, 0.29%)</title><rect x="565.7" y="253" width="3.5" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="568.73" y="263.5" ></text>
+</g>
+<g >
+<title>[libdart.so.6.13.2] (19,768,616 cache misses, 1.49%)</title><rect x="519.3" y="301" width="17.6" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="522.27" y="311.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::TemplateBodyNodePtr&lt;dart::dynamics::BodyNode&gt;::operator (318,398 cache misses, 0.02%)</title><rect x="1082.1" y="269" width="0.3" height="15.0" fill="rgb(211,30,7)" rx="2" ry="2" />
+<text  x="1085.09" y="279.5" ></text>
+</g>
+<g >
+<title>[unknown] (177,486 cache misses, 0.01%)</title><rect x="299.7" y="269" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="302.69" y="279.5" ></text>
+</g>
+<g >
+<title>all (1,326,392,540 cache misses, 100%)</title><rect x="10.0" y="573" width="1180.0" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="13.00" y="583.5" ></text>
+</g>
+<g >
+<title>Eigen::PlainObjectBase&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt; &gt;::~PlainObjectBase (1,117,220 cache misses, 0.08%)</title><rect x="375.9" y="333" width="1.0" height="15.0" fill="rgb(240,164,39)" rx="2" ry="2" />
+<text  x="378.86" y="343.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_put_node (684,047 cache misses, 0.05%)</title><rect x="315.1" y="189" width="0.6" height="15.0" fill="rgb(252,220,52)" rx="2" ry="2" />
+<text  x="318.10" y="199.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::redux_novec_unroller&lt;Eigen::internal::scalar_sum_op&lt;double, double&gt;, Eigen::internal::redux_evaluator&lt;Eigen::Diagonal&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; const, 0&gt; &gt;, 2, 1&gt;::run (1,318,496 cache misses, 0.10%)</title><rect x="1089.5" y="109" width="1.2" height="15.0" fill="rgb(250,207,49)" rx="2" ry="2" />
+<text  x="1092.48" y="119.5" ></text>
+</g>
+<g >
+<title>std::map&lt;std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt;, void*, std::less&lt;std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt; &gt;, std::allocator&lt;std::pair&lt;std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt; const, void*&gt; &gt; &gt;::find (121,603 cache misses, 0.01%)</title><rect x="1186.2" y="221" width="0.1" height="15.0" fill="rgb(251,214,51)" rx="2" ry="2" />
+<text  x="1189.22" y="231.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::Assignment&lt;Eigen::Matrix&lt;double, 3, 1, 0, 3, 1&gt;, Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 1, true&gt;, Eigen::internal::assign_op&lt;double, double&gt;, Eigen::internal::Dense2Dense, void&gt;::run (3,831,406 cache misses, 0.29%)</title><rect x="1082.4" y="189" width="3.4" height="15.0" fill="rgb(251,214,51)" rx="2" ry="2" />
+<text  x="1085.38" y="199.5" ></text>
+</g>
+<g >
+<title>gz::physics::WorldPose* std::vector&lt;gz::physics::WorldPose, std::allocator&lt;gz::physics::WorldPose&gt; &gt;::_M_allocate_and_copy&lt;__gnu_cxx::__normal_iterator&lt;gz::physics::WorldPose const*, std::vector&lt;gz::physics::WorldPose, std::allocator&lt;gz::physics::WorldPose&gt; &gt; &gt; &gt; (3,602,457 cache misses, 0.27%)</title><rect x="332.8" y="253" width="3.2" height="15.0" fill="rgb(218,60,14)" rx="2" ry="2" />
+<text  x="335.79" y="263.5" ></text>
+</g>
+<g >
+<title>Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt;::Block (624,255 cache misses, 0.05%)</title><rect x="1090.8" y="237" width="0.6" height="15.0" fill="rgb(240,164,39)" rx="2" ry="2" />
+<text  x="1093.80" y="247.5" ></text>
+</g>
+<g >
+<title>dxHashSpace::collide (274,171,094 cache misses, 20.67%)</title><rect x="668.0" y="269" width="243.9" height="15.0" fill="rgb(229,113,27)" rx="2" ry="2" />
+<text  x="670.97" y="279.5" >dxHashSpace::collide</text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_erase (6,052,543 cache misses, 0.46%)</title><rect x="311.2" y="237" width="5.4" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="314.20" y="247.5" ></text>
+</g>
+<g >
+<title>dart::collision::OdeCollisionObject::updateEngineData (102,754,486 cache misses, 7.75%)</title><rect x="576.5" y="253" width="91.4" height="15.0" fill="rgb(219,64,15)" rx="2" ry="2" />
+<text  x="579.53" y="263.5" >dart::coll..</text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_Auto_node::_Auto_node&lt;std::pair&lt;unsigned long, gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&amp;&gt; &gt; (25,877,342 cache misses, 1.95%)</title><rect x="41.7" y="349" width="23.0" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="44.67" y="359.5" >s..</text>
+</g>
+<g >
+<title>__frexp (572,893 cache misses, 0.04%)</title><rect x="836.6" y="253" width="0.5" height="15.0" fill="rgb(239,159,38)" rx="2" ry="2" />
+<text  x="839.63" y="263.5" ></text>
+</g>
+<g >
+<title>_int_free (3,599,839 cache misses, 0.27%)</title><rect x="326.1" y="269" width="3.2" height="15.0" fill="rgb(247,196,46)" rx="2" ry="2" />
+<text  x="329.12" y="279.5" ></text>
+</g>
+<g >
+<title>__GI___libc_malloc (10,247,937 cache misses, 0.77%)</title><rect x="1153.3" y="237" width="9.1" height="15.0" fill="rgb(219,68,16)" rx="2" ry="2" />
+<text  x="1156.32" y="247.5" ></text>
+</g>
+<g >
+<title>void gz::sim::v11::EntityComponentManager::EachNew&lt;gz::sim::v11::components::Component&lt;std::add_lvalue_reference&lt;void&gt;, gz::sim::v11::components::WorldTag, gz::sim::v11::serializers::DefaultSerializer&lt;std::add_lvalue_reference&lt;void&gt; &gt; &gt; &gt; (127,630 cache misses, 0.01%)</title><rect x="1188.1" y="381" width="0.1" height="15.0" fill="rgb(234,136,32)" rx="2" ry="2" />
+<text  x="1191.07" y="391.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree_increment (899,936 cache misses, 0.07%)</title><rect x="300.0" y="381" width="0.8" height="15.0" fill="rgb(247,196,46)" rx="2" ry="2" />
+<text  x="302.99" y="391.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::EntityComponentManager::ClearNewlyCreatedEntities (2,787,556 cache misses, 0.21%)</title><rect x="10.2" y="429" width="2.5" height="15.0" fill="rgb(240,164,39)" rx="2" ry="2" />
+<text  x="13.20" y="439.5" ></text>
+</g>
+<g >
+<title>gz::physics::dartsim::SimulationFeatures::Write (62,297,591 cache misses, 4.70%)</title><rect x="1107.1" y="365" width="55.4" height="15.0" fill="rgb(247,196,47)" rx="2" ry="2" />
+<text  x="1110.09" y="375.5" >gz::p..</text>
+</g>
+<g >
+<title>Eigen::internal::mapbase_evaluator&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt;, Eigen::Matrix&lt;double, 3, 3, 0, 3, 3&gt; &gt;::coeff (1,820,990 cache misses, 0.14%)</title><rect x="1142.5" y="141" width="1.7" height="15.0" fill="rgb(251,215,51)" rx="2" ry="2" />
+<text  x="1145.53" y="151.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_erase (17,789,037 cache misses, 1.34%)</title><rect x="300.8" y="365" width="15.8" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="303.79" y="375.5" ></text>
+</g>
+<g >
+<title>gz::physics::MakeCloneable&lt;gz::physics::WorldPoses&gt;::Copy (3,810,496 cache misses, 0.29%)</title><rect x="332.8" y="301" width="3.4" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="335.78" y="311.5" ></text>
+</g>
+<g >
+<title>[unknown] (197,529 cache misses, 0.01%)</title><rect x="332.1" y="157" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="335.07" y="167.5" ></text>
+</g>
+<g >
+<title>std::unordered_map&lt;unsigned long, gz::math::v10::Pose3&lt;double&gt;, std::hash&lt;unsigned long&gt;, std::equal_to&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt; &gt; &gt;::operator[] (13,081,700 cache misses, 0.99%)</title><rect x="1150.9" y="349" width="11.6" height="15.0" fill="rgb(228,106,25)" rx="2" ry="2" />
+<text  x="1153.85" y="359.5" ></text>
+</g>
+<g >
+<title>gz::physics::SpecifyData&lt;gz::physics::RequireData&lt;gz::physics::WorldPoses&gt;, gz::physics::ExpectData&lt;gz::physics::ChangedWorldPoses, gz::physics::Contacts, gz::physics::JointPositions&gt; &gt;::operator= (4,068,814 cache misses, 0.31%)</title><rect x="332.6" y="397" width="3.6" height="15.0" fill="rgb(248,201,48)" rx="2" ry="2" />
+<text  x="335.59" y="407.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::dense_assignment_loop&lt;Eigen::internal::generic_dense_assignment_kernel&lt;Eigen::internal::evaluator&lt;Eigen::Matrix&lt;double, 3, 1, 0, 3, 1&gt; &gt;, Eigen::internal::evaluator&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 1, true&gt; &gt;, Eigen::internal::assign_op&lt;double, double&gt;, 0&gt;, 3, 2&gt;::run (3,831,406 cache misses, 0.29%)</title><rect x="1082.4" y="157" width="3.4" height="15.0" fill="rgb(219,66,15)" rx="2" ry="2" />
+<text  x="1085.38" y="167.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::redux_novec_unroller&lt;Eigen::internal::scalar_sum_op&lt;double, double&gt;, Eigen::internal::redux_evaluator&lt;Eigen::Diagonal&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; const, 0&gt; &gt;, 0, 3&gt;::run (2,025,845 cache misses, 0.15%)</title><rect x="1142.5" y="221" width="1.8" height="15.0" fill="rgb(250,207,49)" rx="2" ry="2" />
+<text  x="1145.45" y="231.5" ></text>
+</g>
+<g >
+<title>Eigen::MatrixBase&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; &gt;::trace (2,025,845 cache misses, 0.15%)</title><rect x="1142.5" y="285" width="1.8" height="15.0" fill="rgb(249,206,49)" rx="2" ry="2" />
+<text  x="1145.45" y="295.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_put_node (1,216,136 cache misses, 0.09%)</title><rect x="301.9" y="269" width="1.1" height="15.0" fill="rgb(252,220,52)" rx="2" ry="2" />
+<text  x="304.87" y="279.5" ></text>
+</g>
+<g >
+<title>[libdart.so.6.13.2] (119,315 cache misses, 0.01%)</title><rect x="10.0" y="541" width="0.1" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="13.00" y="551.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_erase (3,344,258 cache misses, 0.25%)</title><rect x="313.6" y="221" width="3.0" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="316.60" y="231.5" ></text>
+</g>
+<g >
+<title>dart::collision::GzCollisionDetector::LimitCollisionPairMaxContacts (154,818 cache misses, 0.01%)</title><rect x="571.4" y="285" width="0.2" height="15.0" fill="rgb(224,89,21)" rx="2" ry="2" />
+<text  x="574.45" y="295.5" ></text>
+</g>
+<g >
+<title>dart::collision::CollisionGroup::update (233,294 cache misses, 0.02%)</title><rect x="1189.3" y="541" width="0.2" height="15.0" fill="rgb(210,26,6)" rx="2" ry="2" />
+<text  x="1192.30" y="551.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, unsigned long, std::_Identity&lt;unsigned long&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::_M_put_node (6,789,546 cache misses, 0.51%)</title><rect x="323.9" y="333" width="6.0" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="326.90" y="343.5" ></text>
+</g>
+<g >
+<title>std::_Hashtable&lt;unsigned long, std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, std::allocator&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt; &gt;, std::__detail::_Select1st, std::equal_to&lt;unsigned long&gt;, std::hash&lt;unsigned long&gt;, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits&lt;false, false, true&gt; &gt;::_M_find_node (221,332 cache misses, 0.02%)</title><rect x="1151.2" y="317" width="0.2" height="15.0" fill="rgb(219,67,16)" rx="2" ry="2" />
+<text  x="1154.25" y="327.5" ></text>
+</g>
+<g >
+<title>gz::physics::CompositeData::Copy (3,983,409 cache misses, 0.30%)</title><rect x="332.7" y="349" width="3.5" height="15.0" fill="rgb(217,55,13)" rx="2" ry="2" />
+<text  x="335.67" y="359.5" ></text>
+</g>
+<g >
+<title>__GI___libc_free (1,656,308 cache misses, 0.12%)</title><rect x="303.8" y="205" width="1.4" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="306.75" y="215.5" ></text>
+</g>
+<g >
+<title>gz::physics::WorldPose* std::uninitialized_copy&lt;__gnu_cxx::__normal_iterator&lt;gz::physics::WorldPose const*, std::vector&lt;gz::physics::WorldPose, std::allocator&lt;gz::physics::WorldPose&gt; &gt; &gt;, gz::physics::WorldPose*&gt; (3,602,457 cache misses, 0.27%)</title><rect x="332.8" y="221" width="3.2" height="15.0" fill="rgb(237,150,36)" rx="2" ry="2" />
+<text  x="335.79" y="231.5" ></text>
+</g>
+<g >
+<title>std::__new_allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::deallocate (396,640 cache misses, 0.03%)</title><rect x="301.2" y="253" width="0.3" height="15.0" fill="rgb(230,115,27)" rx="2" ry="2" />
+<text  x="304.16" y="263.5" ></text>
+</g>
+<g >
+<title>[unknown] (122,918 cache misses, 0.01%)</title><rect x="331.9" y="349" width="0.2" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="334.95" y="359.5" ></text>
+</g>
+<g >
+<title>std::_Hashtable&lt;unsigned long, std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, std::allocator&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt; &gt;, std::__detail::_Select1st, std::equal_to&lt;unsigned long&gt;, std::hash&lt;unsigned long&gt;, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits&lt;false, false, true&gt; &gt;::_M_insert_bucket_begin (239,674 cache misses, 0.02%)</title><rect x="1151.6" y="301" width="0.2" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="1154.62" y="311.5" ></text>
+</g>
+<g >
+<title>[unknown] (122,918 cache misses, 0.01%)</title><rect x="331.9" y="301" width="0.2" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="334.95" y="311.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_drop_node (2,123,899 cache misses, 0.16%)</title><rect x="306.3" y="253" width="1.9" height="15.0" fill="rgb(208,16,3)" rx="2" ry="2" />
+<text  x="309.31" y="263.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_S_right (11,424,400 cache misses, 0.86%)</title><rect x="69.9" y="333" width="10.2" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="72.90" y="343.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_erase (17,789,037 cache misses, 1.34%)</title><rect x="300.8" y="349" width="15.8" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="303.79" y="359.5" ></text>
+</g>
+<g >
+<title>tcache_put (2,302,772 cache misses, 0.17%)</title><rect x="904.4" y="205" width="2.0" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="907.36" y="215.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::detail::View* gz::sim::v11::EntityComponentManager::FindView&lt;gz::sim::v11::components::Component&lt;std::add_lvalue_reference&lt;void&gt;, gz::sim::v11::components::WorldTag, gz::sim::v11::serializers::DefaultSerializer&lt;std::add_lvalue_reference&lt;void&gt; &gt; &gt; &gt; (132,861 cache misses, 0.01%)</title><rect x="1188.7" y="413" width="0.1" height="15.0" fill="rgb(206,7,1)" rx="2" ry="2" />
+<text  x="1191.72" y="423.5" ></text>
+</g>
+<g >
+<title>tcache_get_n (1,060,857 cache misses, 0.08%)</title><rect x="409.0" y="285" width="0.9" height="15.0" fill="rgb(229,110,26)" rx="2" ry="2" />
+<text  x="412.00" y="295.5" ></text>
+</g>
+<g >
+<title>malloc_consolidate (3,319,615 cache misses, 0.25%)</title><rect x="833.6" y="205" width="3.0" height="15.0" fill="rgb(239,159,38)" rx="2" ry="2" />
+<text  x="836.62" y="215.5" ></text>
+</g>
+<g >
+<title>futex_wake (122,918 cache misses, 0.01%)</title><rect x="331.9" y="381" width="0.2" height="15.0" fill="rgb(219,65,15)" rx="2" ry="2" />
+<text  x="334.95" y="391.5" ></text>
+</g>
+<g >
+<title>Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt;::~Matrix (1,117,220 cache misses, 0.08%)</title><rect x="375.9" y="349" width="1.0" height="15.0" fill="rgb(219,66,15)" rx="2" ry="2" />
+<text  x="378.86" y="359.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;* std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_create_node&lt;std::pair&lt;unsigned long, gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&amp;&gt; &gt; (25,877,342 cache misses, 1.95%)</title><rect x="41.7" y="333" width="23.0" height="15.0" fill="rgb(249,205,49)" rx="2" ry="2" />
+<text  x="44.67" y="343.5" >s..</text>
+</g>
+<g >
+<title>dart::constraint::ConstraintSolver::solve (601,484,271 cache misses, 45.35%)</title><rect x="494.4" y="333" width="535.1" height="15.0" fill="rgb(218,60,14)" rx="2" ry="2" />
+<text  x="497.38" y="343.5" >dart::constraint::ConstraintSolver::solve</text>
+</g>
+<g >
+<title>void gz::sim::v11::EntityComponentManager::Each&lt;gz::sim::v11::components::Component&lt;std::add_lvalue_reference&lt;void&gt;, gz::sim::v11::components::DefaultLevelTag, gz::sim::v11::serializers::DefaultSerializer&lt;std::add_lvalue_reference&lt;void&gt; &gt; &gt; &gt; (225,074 cache misses, 0.02%)</title><rect x="12.8" y="413" width="0.2" height="15.0" fill="rgb(232,128,30)" rx="2" ry="2" />
+<text  x="15.81" y="423.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree_iterator&lt;unsigned long&gt; std::_Rb_tree&lt;unsigned long, unsigned long, std::_Identity&lt;unsigned long&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::_M_insert_unique_&lt;unsigned long const&amp;, std::_Rb_tree&lt;unsigned long, unsigned long, std::_Identity&lt;unsigned long&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::_Alloc_node&gt; (7,181,841 cache misses, 0.54%)</title><rect x="317.5" y="365" width="6.4" height="15.0" fill="rgb(207,10,2)" rx="2" ry="2" />
+<text  x="320.51" y="375.5" ></text>
+</g>
+<g >
+<title>std::__new_allocator&lt;std::__detail::_Hash_node_base*&gt;::allocate (156,514 cache misses, 0.01%)</title><rect x="1152.5" y="221" width="0.1" height="15.0" fill="rgb(236,143,34)" rx="2" ry="2" />
+<text  x="1155.47" y="231.5" ></text>
+</g>
+<g >
+<title>tcache_get (259,866 cache misses, 0.02%)</title><rect x="64.1" y="237" width="0.2" height="15.0" fill="rgb(253,222,53)" rx="2" ry="2" />
+<text  x="67.07" y="247.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_get_insert_unique_pos (16,355,274 cache misses, 1.23%)</title><rect x="65.5" y="349" width="14.6" height="15.0" fill="rgb(226,100,23)" rx="2" ry="2" />
+<text  x="68.51" y="359.5" ></text>
+</g>
+<g >
+<title>std::__detail::_Mod_range_hashing::operator (230,031 cache misses, 0.02%)</title><rect x="1152.6" y="253" width="0.2" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="1155.62" y="263.5" ></text>
+</g>
+<g >
+<title>Eigen::DenseBase&lt;Eigen::Diagonal&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; const, 0&gt; &gt;::sum (1,569,356 cache misses, 0.12%)</title><rect x="1089.4" y="189" width="1.4" height="15.0" fill="rgb(248,200,48)" rx="2" ry="2" />
+<text  x="1092.40" y="199.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::Assignment&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt;, Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt;, Eigen::internal::assign_op&lt;double, double&gt;, Eigen::internal::Dense2Dense, void&gt;::run (2,837,621 cache misses, 0.21%)</title><rect x="1036.0" y="253" width="2.6" height="15.0" fill="rgb(232,128,30)" rx="2" ry="2" />
+<text  x="1039.05" y="263.5" ></text>
+</g>
+<g >
+<title>[libdart.so.6.13.2] (4,734,540 cache misses, 0.36%)</title><rect x="706.5" y="205" width="4.2" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="709.53" y="215.5" ></text>
+</g>
+<g >
+<title>_int_free (690,383 cache misses, 0.05%)</title><rect x="1150.2" y="205" width="0.6" height="15.0" fill="rgb(247,196,46)" rx="2" ry="2" />
+<text  x="1153.22" y="215.5" ></text>
+</g>
+<g >
+<title>std::__new_allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::deallocate (286,047 cache misses, 0.02%)</title><rect x="315.7" y="141" width="0.3" height="15.0" fill="rgb(230,115,27)" rx="2" ry="2" />
+<text  x="318.73" y="151.5" ></text>
+</g>
+<g >
+<title>std::_Vector_base&lt;gz::physics::WorldPose, std::allocator&lt;gz::physics::WorldPose&gt; &gt;::_M_allocate (10,194,924 cache misses, 0.77%)</title><rect x="1098.0" y="237" width="9.0" height="15.0" fill="rgb(250,210,50)" rx="2" ry="2" />
+<text  x="1100.95" y="247.5" ></text>
+</g>
+<g >
+<title>__GI___libc_free (6,092,765 cache misses, 0.46%)</title><rect x="323.9" y="285" width="5.4" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="326.90" y="295.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::Skeleton::clearConstraintImpulses (189,033 cache misses, 0.01%)</title><rect x="1189.6" y="525" width="0.1" height="15.0" fill="rgb(223,82,19)" rx="2" ry="2" />
+<text  x="1192.57" y="535.5" ></text>
+</g>
+<g >
+<title>dart::collision::CollisionGroup::updateSkeletonSource (233,294 cache misses, 0.02%)</title><rect x="1189.3" y="525" width="0.2" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="1192.30" y="535.5" ></text>
+</g>
+<g >
+<title>dxGeom::computePosr (33,668,746 cache misses, 2.54%)</title><rect x="864.3" y="237" width="30.0" height="15.0" fill="rgb(205,3,0)" rx="2" ry="2" />
+<text  x="867.30" y="247.5" >dx..</text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, unsigned long, std::_Identity&lt;unsigned long&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::begin (6,121,918 cache misses, 0.46%)</title><rect x="80.3" y="365" width="5.5" height="15.0" fill="rgb(226,100,24)" rx="2" ry="2" />
+<text  x="83.33" y="375.5" ></text>
+</g>
+<g >
+<title>void Eigen::internal::conditional_aligned_free&lt;true&gt; (1,117,220 cache misses, 0.08%)</title><rect x="375.9" y="285" width="1.0" height="15.0" fill="rgb(232,126,30)" rx="2" ry="2" />
+<text  x="378.86" y="295.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_drop_node (1,785,552 cache misses, 0.13%)</title><rect x="309.6" y="237" width="1.6" height="15.0" fill="rgb(208,16,3)" rx="2" ry="2" />
+<text  x="312.61" y="247.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_erase (968,600 cache misses, 0.07%)</title><rect x="315.7" y="205" width="0.9" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="318.70" y="215.5" ></text>
+</g>
+<g >
+<title>_int_free_maybe_consolidate (3,323,357 cache misses, 0.25%)</title><rect x="833.6" y="221" width="3.0" height="15.0" fill="rgb(244,183,43)" rx="2" ry="2" />
+<text  x="836.62" y="231.5" ></text>
+</g>
+<g >
+<title>dart::collision::CollisionObject::getShapeFrame (122,451 cache misses, 0.01%)</title><rect x="710.7" y="205" width="0.2" height="15.0" fill="rgb(236,146,35)" rx="2" ry="2" />
+<text  x="713.74" y="215.5" ></text>
+</g>
+<g >
+<title>std::__detail::_Hash_node&lt;std::pair&lt;unsigned long const, std::shared_ptr&lt;gz::physics::dartsim::LinkInfo&gt; &gt;, false&gt;::_M_next (421,748 cache misses, 0.03%)</title><rect x="1095.2" y="237" width="0.3" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="1098.17" y="247.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree_increment (29,387,451 cache misses, 2.22%)</title><rect x="13.9" y="365" width="26.1" height="15.0" fill="rgb(247,196,46)" rx="2" ry="2" />
+<text  x="16.88" y="375.5" >s..</text>
+</g>
+<g >
+<title>std::allocator_traits&lt;std::allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt; &gt;::deallocate (1,216,136 cache misses, 0.09%)</title><rect x="301.9" y="253" width="1.1" height="15.0" fill="rgb(215,50,12)" rx="2" ry="2" />
+<text  x="304.87" y="263.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, unsigned long, std::_Identity&lt;unsigned long&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::_M_erase (301,579 cache misses, 0.02%)</title><rect x="10.2" y="365" width="0.3" height="15.0" fill="rgb(231,119,28)" rx="2" ry="2" />
+<text  x="13.24" y="375.5" ></text>
+</g>
+<g >
+<title>__libc_start_main_impl (1,325,066,450 cache misses, 99.90%)</title><rect x="10.1" y="525" width="1178.9" height="15.0" fill="rgb(218,63,15)" rx="2" ry="2" />
+<text  x="13.15" y="535.5" >__libc_start_main_impl</text>
+</g>
+<g >
+<title>void Eigen::internal::pstore&lt;double, double __vector (1,158,172 cache misses, 0.09%)</title><rect x="1036.8" y="157" width="1.0" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="1039.78" y="167.5" ></text>
+</g>
+<g >
+<title>dart::collision::OdeCollisionDetector::collide (382,514,914 cache misses, 28.84%)</title><rect x="571.6" y="285" width="340.3" height="15.0" fill="rgb(232,126,30)" rx="2" ry="2" />
+<text  x="574.58" y="295.5" >dart::collision::OdeCollisionDetector::collide</text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_drop_node (396,640 cache misses, 0.03%)</title><rect x="301.2" y="301" width="0.3" height="15.0" fill="rgb(208,16,3)" rx="2" ry="2" />
+<text  x="304.16" y="311.5" ></text>
+</g>
+<g >
+<title>tcache_get_n (585,662 cache misses, 0.04%)</title><rect x="322.9" y="205" width="0.5" height="15.0" fill="rgb(229,110,26)" rx="2" ry="2" />
+<text  x="325.90" y="215.5" ></text>
+</g>
+<g >
+<title>gz::physics::Gravity::Implementation&lt;gz::physics::FeaturePolicy&lt;double, 3ul&gt; &gt;* gz::plugin::Plugin::QueryInterface&lt;gz::physics::Gravity::Implementation&lt;gz::physics::FeaturePolicy&lt;double, 3ul&gt; &gt; &gt; (162,826 cache misses, 0.01%)</title><rect x="1186.2" y="253" width="0.2" height="15.0" fill="rgb(244,180,43)" rx="2" ry="2" />
+<text  x="1189.21" y="263.5" ></text>
+</g>
+<g >
+<title>_int_malloc (54,559,220 cache misses, 4.11%)</title><rect x="779.4" y="205" width="48.5" height="15.0" fill="rgb(215,47,11)" rx="2" ry="2" />
+<text  x="782.39" y="215.5" >_int..</text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_insert_node (919,847 cache misses, 0.07%)</title><rect x="64.7" y="333" width="0.8" height="15.0" fill="rgb(211,30,7)" rx="2" ry="2" />
+<text  x="67.69" y="343.5" ></text>
+</g>
+<g >
+<title>std::__detail::_Hash_code_base&lt;unsigned long, std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, std::__detail::_Select1st, std::hash&lt;unsigned long&gt;, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, false&gt;::_M_bucket_index (230,031 cache misses, 0.02%)</title><rect x="1152.6" y="269" width="0.2" height="15.0" fill="rgb(219,64,15)" rx="2" ry="2" />
+<text  x="1155.62" y="279.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::SimulationRunner::UpdatePhysicsParams (341,704 cache misses, 0.03%)</title><rect x="1188.6" y="445" width="0.4" height="15.0" fill="rgb(218,60,14)" rx="2" ry="2" />
+<text  x="1191.65" y="455.5" ></text>
+</g>
+<g >
+<title>std::set&lt;unsigned long, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::clear (426,438 cache misses, 0.03%)</title><rect x="10.2" y="397" width="0.4" height="15.0" fill="rgb(229,111,26)" rx="2" ry="2" />
+<text  x="13.24" y="407.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree_header::_M_reset (124,859 cache misses, 0.01%)</title><rect x="10.5" y="365" width="0.1" height="15.0" fill="rgb(238,151,36)" rx="2" ry="2" />
+<text  x="13.51" y="375.5" ></text>
+</g>
+<g >
+<title>_int_malloc (203,633 cache misses, 0.02%)</title><rect x="336.0" y="253" width="0.2" height="15.0" fill="rgb(215,47,11)" rx="2" ry="2" />
+<text  x="338.99" y="263.5" ></text>
+</g>
+<g >
+<title>dGeomGetData@plt (133,707 cache misses, 0.01%)</title><rect x="699.5" y="237" width="0.1" height="15.0" fill="rgb(249,202,48)" rx="2" ry="2" />
+<text  x="702.45" y="247.5" ></text>
+</g>
+<g >
+<title>gz::math::v10::Quaternion&lt;double&gt;::Equal (1,118,267 cache misses, 0.08%)</title><rect x="1147.4" y="349" width="1.0" height="15.0" fill="rgb(215,48,11)" rx="2" ry="2" />
+<text  x="1150.44" y="359.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::BodyNode::getSkeleton (34,199,071 cache misses, 2.58%)</title><rect x="710.9" y="205" width="30.4" height="15.0" fill="rgb(212,36,8)" rx="2" ry="2" />
+<text  x="713.85" y="215.5" >da..</text>
+</g>
+<g >
+<title>[libstdc++.so.6.0.33] (376,076 cache misses, 0.03%)</title><rect x="1189.0" y="509" width="0.3" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="1191.97" y="519.5" ></text>
+</g>
+<g >
+<title> (318,398 cache misses, 0.02%)</title><rect x="1082.1" y="253" width="0.3" height="15.0" fill="rgb(232,128,30)" rx="2" ry="2" />
+<text  x="1085.09" y="263.5" ></text>
+</g>
+<g >
+<title>dxGeom::AABBTest (221,466 cache misses, 0.02%)</title><rect x="779.1" y="237" width="0.2" height="15.0" fill="rgb(230,119,28)" rx="2" ry="2" />
+<text  x="782.14" y="247.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::BodyNode::asSoftBodyNode (257,763 cache misses, 0.02%)</title><rect x="957.0" y="301" width="0.2" height="15.0" fill="rgb(215,49,11)" rx="2" ry="2" />
+<text  x="959.99" y="311.5" ></text>
+</g>
+<g >
+<title>void gz::physics::OperateOnSpecifiedData&lt;gz::physics::RequireData&lt;gz::physics::WorldPoses&gt;, gz::physics::FindRequired, gz::physics::detail::WriteDataOperation, gz::physics::dartsim::SimulationFeatures const&gt;::Operate&lt;gz::physics::SpecifyData&lt;gz::physics::RequireData&lt;gz::physics::WorldPoses&gt;, gz::physics::ExpectData&lt;gz::physics::ChangedWorldPoses, gz::physics::Contacts, gz::physics::JointPositions&gt; &gt; &gt; (76,954,477 cache misses, 5.80%)</title><rect x="1038.6" y="333" width="68.5" height="15.0" fill="rgb(248,199,47)" rx="2" ry="2" />
+<text  x="1041.63" y="343.5" >void gz..</text>
+</g>
+<g >
+<title>gz::physics::dartsim::SimulationFeatures::WorldForwardStep (1,158,172 cache misses, 0.09%)</title><rect x="1036.8" y="141" width="1.0" height="15.0" fill="rgb(222,79,19)" rx="2" ry="2" />
+<text  x="1039.78" y="151.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::SkeletonRefCountingBase::incrementReferenceCount (28,307,631 cache misses, 2.13%)</title><rect x="746.7" y="189" width="25.1" height="15.0" fill="rgb(226,101,24)" rx="2" ry="2" />
+<text  x="749.66" y="199.5" >d..</text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_put_node (202,538 cache misses, 0.02%)</title><rect x="300.9" y="301" width="0.1" height="15.0" fill="rgb(252,220,52)" rx="2" ry="2" />
+<text  x="303.86" y="311.5" ></text>
+</g>
+<g >
+<title>std::allocator_traits&lt;std::allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt; &gt;::deallocate (1,674,150 cache misses, 0.13%)</title><rect x="303.7" y="237" width="1.5" height="15.0" fill="rgb(215,50,12)" rx="2" ry="2" />
+<text  x="306.75" y="247.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::~_Rb_tree (17,789,037 cache misses, 1.34%)</title><rect x="300.8" y="381" width="15.8" height="15.0" fill="rgb(251,213,50)" rx="2" ry="2" />
+<text  x="303.79" y="391.5" ></text>
+</g>
+<g >
+<title>gz::physics::EntityPtr&lt;gz::physics::World&lt;gz::physics::FeaturePolicy&lt;double, 3ul&gt;, gz::sim::v11::systems::PhysicsPrivate::GravityFeatureList&gt; &gt;::EntityPtr (118,895 cache misses, 0.01%)</title><rect x="1186.0" y="285" width="0.1" height="15.0" fill="rgb(214,44,10)" rx="2" ry="2" />
+<text  x="1188.96" y="295.5" ></text>
+</g>
+<g >
+<title>Eigen::MatrixBase&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; &gt;::trace (1,569,356 cache misses, 0.12%)</title><rect x="1089.4" y="205" width="1.4" height="15.0" fill="rgb(249,206,49)" rx="2" ry="2" />
+<text  x="1092.40" y="215.5" ></text>
+</g>
+<g >
+<title>Eigen::MapBase&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt;, 0&gt;::MapBase (589,022 cache misses, 0.04%)</title><rect x="1090.8" y="189" width="0.5" height="15.0" fill="rgb(229,114,27)" rx="2" ry="2" />
+<text  x="1093.80" y="199.5" ></text>
+</g>
+<g >
+<title>std::allocator_traits&lt;std::allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt; &gt;::deallocate (286,047 cache misses, 0.02%)</title><rect x="315.7" y="157" width="0.3" height="15.0" fill="rgb(215,50,12)" rx="2" ry="2" />
+<text  x="318.73" y="167.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::Node::getBodyNodePtr (32,748,841 cache misses, 2.47%)</title><rect x="742.7" y="205" width="29.1" height="15.0" fill="rgb(247,197,47)" rx="2" ry="2" />
+<text  x="745.71" y="215.5" >da..</text>
+</g>
+<g >
+<title>gz::sim::v11::SimulationRunner::UpdateCurrentInfo (125,760 cache misses, 0.01%)</title><rect x="1188.5" y="445" width="0.1" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1191.53" y="455.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, unsigned long, std::_Identity&lt;unsigned long&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::~_Rb_tree (7,532,292 cache misses, 0.57%)</title><rect x="323.9" y="381" width="6.7" height="15.0" fill="rgb(221,77,18)" rx="2" ry="2" />
+<text  x="326.90" y="391.5" ></text>
+</g>
+<g >
+<title>_start (1,325,066,450 cache misses, 99.90%)</title><rect x="10.1" y="541" width="1178.9" height="15.0" fill="rgb(245,185,44)" rx="2" ry="2" />
+<text  x="13.15" y="551.5" >_start</text>
+</g>
+<g >
+<title>gz::physics::WorldPose* std::__uninitialized_copy&lt;false&gt;::__uninit_copy&lt;__gnu_cxx::__normal_iterator&lt;gz::physics::WorldPose const*, std::vector&lt;gz::physics::WorldPose, std::allocator&lt;gz::physics::WorldPose&gt; &gt; &gt;, gz::physics::WorldPose*&gt; (3,602,457 cache misses, 0.27%)</title><rect x="332.8" y="205" width="3.2" height="15.0" fill="rgb(208,17,4)" rx="2" ry="2" />
+<text  x="335.79" y="215.5" ></text>
+</g>
+<g >
+<title>gz::physics::dartsim::SimulationFeatures::WorldForwardStep (865,663,242 cache misses, 65.26%)</title><rect x="337.0" y="365" width="770.1" height="15.0" fill="rgb(222,79,19)" rx="2" ry="2" />
+<text  x="339.97" y="375.5" >gz::physics::dartsim::SimulationFeatures::WorldForwardStep</text>
+</g>
+<g >
+<title>std::__new_allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::deallocate (2,123,899 cache misses, 0.16%)</title><rect x="306.3" y="205" width="1.9" height="15.0" fill="rgb(230,115,27)" rx="2" ry="2" />
+<text  x="309.31" y="215.5" ></text>
+</g>
+<g >
+<title>std::_Hashtable&lt;unsigned long, std::pair&lt;unsigned long const, unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, unsigned long&gt; &gt;, std::__detail::_Select1st, std::equal_to&lt;unsigned long&gt;, std::hash&lt;unsigned long&gt;, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits&lt;false, false, true&gt; &gt;::find (208,057,575 cache misses, 15.69%)</title><rect x="114.8" y="365" width="185.0" height="15.0" fill="rgb(211,28,6)" rx="2" ry="2" />
+<text  x="117.75" y="375.5" >std::_Hashtable&lt;unsigned..</text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, unsigned long, std::_Identity&lt;unsigned long&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::_M_erase (736,849 cache misses, 0.06%)</title><rect x="329.9" y="349" width="0.7" height="15.0" fill="rgb(231,119,28)" rx="2" ry="2" />
+<text  x="332.94" y="359.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree_const_iterator&lt;std::pair&lt;unsigned long const, gz::math::v10::graph::Vertex&lt;unsigned long&gt; &gt; &gt;::operator++ (29,440,199 cache misses, 2.22%)</title><rect x="13.8" y="381" width="26.2" height="15.0" fill="rgb(205,4,1)" rx="2" ry="2" />
+<text  x="16.84" y="391.5" >s..</text>
+</g>
+<g >
+<title>std::allocator_traits&lt;std::allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt; &gt;::deallocate (1,785,552 cache misses, 0.13%)</title><rect x="309.6" y="205" width="1.6" height="15.0" fill="rgb(215,50,12)" rx="2" ry="2" />
+<text  x="312.61" y="215.5" ></text>
+</g>
+<g >
+<title>std::__new_allocator&lt;gz::physics::WorldPose&gt;::allocate (10,194,924 cache misses, 0.77%)</title><rect x="1098.0" y="205" width="9.0" height="15.0" fill="rgb(229,113,27)" rx="2" ry="2" />
+<text  x="1100.95" y="215.5" ></text>
+</g>
+<g >
+<title>bool gz::math::v10::equal&lt;double&gt; (952,332 cache misses, 0.07%)</title><rect x="1147.6" y="333" width="0.8" height="15.0" fill="rgb(247,193,46)" rx="2" ry="2" />
+<text  x="1150.58" y="343.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::Skeleton::getDof (20,969,598 cache misses, 1.58%)</title><rect x="471.2" y="333" width="18.7" height="15.0" fill="rgb(238,152,36)" rx="2" ry="2" />
+<text  x="474.20" y="343.5" ></text>
+</g>
+<g >
+<title>_int_free (192,050 cache misses, 0.01%)</title><rect x="315.8" y="109" width="0.2" height="15.0" fill="rgb(247,196,46)" rx="2" ry="2" />
+<text  x="318.82" y="119.5" ></text>
+</g>
+<g >
+<title>gz::transport::v16::Node::Publisher::Publish (866,270 cache misses, 0.07%)</title><rect x="330.9" y="413" width="0.8" height="15.0" fill="rgb(242,173,41)" rx="2" ry="2" />
+<text  x="333.94" y="423.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, unsigned long, std::_Identity&lt;unsigned long&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::_M_get_insert_unique_pos (1,287,692 cache misses, 0.10%)</title><rect x="318.2" y="333" width="1.1" height="15.0" fill="rgb(247,194,46)" rx="2" ry="2" />
+<text  x="321.20" y="343.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::redux_novec_unroller&lt;Eigen::internal::scalar_sum_op&lt;double, double&gt;, Eigen::internal::redux_evaluator&lt;Eigen::Diagonal&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; const, 0&gt; &gt;, 2, 1&gt;::run (1,820,990 cache misses, 0.14%)</title><rect x="1142.5" y="189" width="1.7" height="15.0" fill="rgb(250,207,49)" rx="2" ry="2" />
+<text  x="1145.53" y="199.5" ></text>
+</g>
+<g >
+<title>malloc_consolidate (41,580,299 cache misses, 3.13%)</title><rect x="790.8" y="189" width="37.0" height="15.0" fill="rgb(239,159,38)" rx="2" ry="2" />
+<text  x="793.85" y="199.5" >mal..</text>
+</g>
+<g >
+<title>dart::dynamics::Skeleton::isMobile (1,904,019 cache misses, 0.14%)</title><rect x="771.8" y="205" width="1.7" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="774.84" y="215.5" ></text>
+</g>
+<g >
+<title>std::allocator_traits&lt;std::allocator&lt;std::_Rb_tree_node&lt;unsigned long&gt; &gt; &gt;::allocate (3,773,172 cache misses, 0.28%)</title><rect x="320.5" y="285" width="3.4" height="15.0" fill="rgb(224,89,21)" rx="2" ry="2" />
+<text  x="323.54" y="295.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::Joint::isKinematic (34,186,918 cache misses, 2.58%)</title><rect x="925.9" y="301" width="30.4" height="15.0" fill="rgb(249,203,48)" rx="2" ry="2" />
+<text  x="928.87" y="311.5" >da..</text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_put_node (1,785,552 cache misses, 0.13%)</title><rect x="309.6" y="221" width="1.6" height="15.0" fill="rgb(252,220,52)" rx="2" ry="2" />
+<text  x="312.61" y="231.5" ></text>
+</g>
+<g >
+<title>void Eigen::internal::generic_dense_assignment_kernel&lt;Eigen::internal::evaluator&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt; &gt;, Eigen::internal::evaluator&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt; &gt;, Eigen::internal::assign_op&lt;double, double&gt;, 0&gt;::assignPacket&lt;16, 16, double __vector (1,158,172 cache misses, 0.09%)</title><rect x="1036.8" y="205" width="1.0" height="15.0" fill="rgb(212,36,8)" rx="2" ry="2" />
+<text  x="1039.78" y="215.5" ></text>
+</g>
+<g >
+<title>Eigen::DenseBase&lt;Eigen::CwiseBinaryOp&lt;Eigen::internal::scalar_cmp_op&lt;double, double,  (746,994 cache misses, 0.06%)</title><rect x="375.2" y="333" width="0.7" height="15.0" fill="rgb(228,108,25)" rx="2" ry="2" />
+<text  x="378.20" y="343.5" ></text>
+</g>
+<g >
+<title>std::allocator_traits&lt;std::allocator&lt;std::__detail::_Hash_node&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, false&gt; &gt; &gt;::deallocate (1,184,779 cache misses, 0.09%)</title><rect x="1149.8" y="253" width="1.1" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="1152.80" y="263.5" ></text>
+</g>
+<g >
+<title>gz::physics::WorldPose* std::__do_uninit_copy&lt;__gnu_cxx::__normal_iterator&lt;gz::physics::WorldPose const*, std::vector&lt;gz::physics::WorldPose, std::allocator&lt;gz::physics::WorldPose&gt; &gt; &gt;, gz::physics::WorldPose*&gt; (3,602,457 cache misses, 0.27%)</title><rect x="332.8" y="189" width="3.2" height="15.0" fill="rgb(251,212,50)" rx="2" ry="2" />
+<text  x="335.79" y="199.5" ></text>
+</g>
+<g >
+<title>double Eigen::DenseBase&lt;Eigen::Diagonal&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; const, 0&gt; &gt;::redux&lt;Eigen::internal::scalar_sum_op&lt;double, double&gt; &gt; (2,025,845 cache misses, 0.15%)</title><rect x="1142.5" y="253" width="1.8" height="15.0" fill="rgb(245,185,44)" rx="2" ry="2" />
+<text  x="1145.45" y="263.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_S_right (244,649 cache misses, 0.02%)</title><rect x="316.3" y="189" width="0.3" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="319.35" y="199.5" ></text>
+</g>
+<g >
+<title>std::unordered_map&lt;unsigned long, gz::math::v10::Pose3&lt;double&gt;, std::hash&lt;unsigned long&gt;, std::equal_to&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt; &gt; &gt;::operator= (1,184,779 cache misses, 0.09%)</title><rect x="1149.8" y="349" width="1.1" height="15.0" fill="rgb(222,81,19)" rx="2" ry="2" />
+<text  x="1152.80" y="359.5" ></text>
+</g>
+<g >
+<title>dart::collision::CollisionGroup::updateEngineData (108,272,173 cache misses, 8.16%)</title><rect x="571.6" y="269" width="96.3" height="15.0" fill="rgb(205,3,0)" rx="2" ry="2" />
+<text  x="574.62" y="279.5" >dart::colli..</text>
+</g>
+<g >
+<title>void gz::sim::v11::EntityComponentManager::EachNoCache&lt;gz::sim::v11::components::Component&lt;std::add_lvalue_reference&lt;void&gt;, gz::sim::v11::components::ModelTag, gz::sim::v11::serializers::DefaultSerializer&lt;std::add_lvalue_reference&lt;void&gt; &gt; &gt;, gz::sim::v11::components::Component&lt;std::add_lvalue_reference&lt;void&gt;, gz::sim::v11::components::RecreateTag, gz::sim::v11::serializers::DefaultSerializer&lt;std::add_lvalue_reference&lt;void&gt; &gt; &gt; &gt; (356,865,980 cache misses, 26.91%)</title><rect x="13.1" y="413" width="317.5" height="15.0" fill="rgb(247,196,46)" rx="2" ry="2" />
+<text  x="16.12" y="423.5" >void gz::sim::v11::EntityComponentManager:..</text>
+</g>
+<g >
+<title>operator new (10,651,482 cache misses, 0.80%)</title><rect x="1153.0" y="253" width="9.5" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="1156.02" y="263.5" ></text>
+</g>
+<g >
+<title>gz::physics::WorldPoses::operator= (3,602,457 cache misses, 0.27%)</title><rect x="332.8" y="285" width="3.2" height="15.0" fill="rgb(247,194,46)" rx="2" ry="2" />
+<text  x="335.79" y="295.5" ></text>
+</g>
+<g >
+<title>double Eigen::internal::redux_impl&lt;Eigen::internal::scalar_sum_op&lt;double, double&gt;, Eigen::internal::redux_evaluator&lt;Eigen::Diagonal&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; const, 0&gt; &gt;, 0, 2&gt;::run&lt;Eigen::Diagonal&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; const, 0&gt; &gt; (2,025,845 cache misses, 0.15%)</title><rect x="1142.5" y="237" width="1.8" height="15.0" fill="rgb(228,109,26)" rx="2" ry="2" />
+<text  x="1145.45" y="247.5" ></text>
+</g>
+<g >
+<title>dGeomMoved (1,521,716 cache misses, 0.11%)</title><rect x="596.0" y="221" width="1.3" height="15.0" fill="rgb(210,23,5)" rx="2" ry="2" />
+<text  x="598.99" y="231.5" ></text>
+</g>
+<g >
+<title>tcache_put (158,657 cache misses, 0.01%)</title><rect x="376.7" y="221" width="0.1" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="379.65" y="231.5" ></text>
+</g>
+<g >
+<title>void Eigen::internal::call_dense_assignment_loop&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt;, Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt;, Eigen::internal::assign_op&lt;double, double&gt; &gt; (2,837,621 cache misses, 0.21%)</title><rect x="1036.0" y="237" width="2.6" height="15.0" fill="rgb(216,50,12)" rx="2" ry="2" />
+<text  x="1039.05" y="247.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_erase (17,486,623 cache misses, 1.32%)</title><rect x="301.0" y="317" width="15.6" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="304.04" y="327.5" ></text>
+</g>
+<g >
+<title>non-virtual thunk to dart::dynamics::ShapeNode::asShapeNode (259,657 cache misses, 0.02%)</title><rect x="776.6" y="221" width="0.3" height="15.0" fill="rgb(247,195,46)" rx="2" ry="2" />
+<text  x="779.63" y="231.5" ></text>
+</g>
+<g >
+<title>std::allocator_traits&lt;std::allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt; &gt;::deallocate (684,047 cache misses, 0.05%)</title><rect x="315.1" y="173" width="0.6" height="15.0" fill="rgb(215,50,12)" rx="2" ry="2" />
+<text  x="318.10" y="183.5" ></text>
+</g>
+<g >
+<title>std::__new_allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::deallocate (684,047 cache misses, 0.05%)</title><rect x="315.1" y="157" width="0.6" height="15.0" fill="rgb(230,115,27)" rx="2" ry="2" />
+<text  x="318.10" y="167.5" ></text>
+</g>
+<g >
+<title>std::_Function_base::~_Function_base (248,633 cache misses, 0.02%)</title><rect x="1187.1" y="365" width="0.2" height="15.0" fill="rgb(221,74,17)" rx="2" ry="2" />
+<text  x="1190.10" y="375.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::Frame::getWorldTransform (41,408,569 cache misses, 3.12%)</title><rect x="1045.3" y="269" width="36.8" height="15.0" fill="rgb(253,224,53)" rx="2" ry="2" />
+<text  x="1048.25" y="279.5" >dar..</text>
+</g>
+<g >
+<title>Eigen::internal::BlockImpl_dense&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false, true&gt;::BlockImpl_dense (3,406,982 cache misses, 0.26%)</title><rect x="1144.3" y="285" width="3.0" height="15.0" fill="rgb(214,43,10)" rx="2" ry="2" />
+<text  x="1147.26" y="295.5" ></text>
+</g>
+<g >
+<title>Eigen::Quaternion&lt;double, 0&gt;&amp; Eigen::QuaternionBase&lt;Eigen::Quaternion&lt;double, 0&gt; &gt;::operator=&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; &gt; (5,520,186 cache misses, 0.42%)</title><rect x="1139.3" y="317" width="5.0" height="15.0" fill="rgb(250,209,50)" rx="2" ry="2" />
+<text  x="1142.35" y="327.5" ></text>
+</g>
+<g >
+<title>operator delete (696,781 cache misses, 0.05%)</title><rect x="329.3" y="285" width="0.6" height="15.0" fill="rgb(247,196,46)" rx="2" ry="2" />
+<text  x="332.32" y="295.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_put_node (153,686 cache misses, 0.01%)</title><rect x="316.0" y="157" width="0.1" height="15.0" fill="rgb(252,220,52)" rx="2" ry="2" />
+<text  x="318.99" y="167.5" ></text>
+</g>
+<g >
+<title>double Eigen::DenseBase&lt;Eigen::Diagonal&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; const, 0&gt; &gt;::redux&lt;Eigen::internal::scalar_sum_op&lt;double, double&gt; &gt; (1,569,356 cache misses, 0.12%)</title><rect x="1089.4" y="173" width="1.4" height="15.0" fill="rgb(245,185,44)" rx="2" ry="2" />
+<text  x="1092.40" y="183.5" ></text>
+</g>
+<g >
+<title>std::allocator_traits&lt;std::allocator&lt;std::__detail::_Hash_node&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, false&gt; &gt; &gt;::allocate (10,651,482 cache misses, 0.80%)</title><rect x="1153.0" y="285" width="9.5" height="15.0" fill="rgb(243,175,42)" rx="2" ry="2" />
+<text  x="1156.02" y="295.5" ></text>
+</g>
+<g >
+<title>__GI___libc_malloc (10,190,837 cache misses, 0.77%)</title><rect x="1098.0" y="173" width="9.0" height="15.0" fill="rgb(219,68,16)" rx="2" ry="2" />
+<text  x="1100.96" y="183.5" ></text>
+</g>
+<g >
+<title>gz::physics::detail::WriteDataOperation&lt;gz::physics::WorldPoses, gz::physics::dartsim::SimulationFeatures const, gz::physics::SpecifyData&lt;gz::physics::RequireData&lt;gz::physics::WorldPoses&gt;, gz::physics::ExpectData&lt;gz::physics::ChangedWorldPoses, gz::physics::Contacts, gz::physics::JointPositions&gt; &gt; &gt;::Operate (76,730,716 cache misses, 5.78%)</title><rect x="1038.8" y="301" width="68.2" height="15.0" fill="rgb(248,200,47)" rx="2" ry="2" />
+<text  x="1041.76" y="311.5" >gz::phy..</text>
+</g>
+<g >
+<title>gz::physics::Gravity::Implementation&lt;gz::physics::FeaturePolicy&lt;double, 3ul&gt; &gt;* gz::plugin::detail::SelectSpecializers&lt;gz::physics::detail::ComposePlugin&lt;gz::physics::FeaturePolicy&lt;double, 3ul&gt;, gz::sim::v11::systems::PhysicsPrivate::GravityFeatureList, void&gt;::type&gt;::QueryInterface&lt;gz::physics::Gravity::Implementation&lt;gz::physics::FeaturePolicy&lt;double, 3ul&gt; &gt; &gt; (171,029 cache misses, 0.01%)</title><rect x="1186.2" y="269" width="0.2" height="15.0" fill="rgb(208,14,3)" rx="2" ry="2" />
+<text  x="1189.20" y="279.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::BodyNode::setColliding (165,008 cache misses, 0.01%)</title><rect x="957.2" y="301" width="0.2" height="15.0" fill="rgb(218,62,15)" rx="2" ry="2" />
+<text  x="960.22" y="311.5" ></text>
+</g>
+<g >
+<title>__GI___libc_free (1,160,040 cache misses, 0.09%)</title><rect x="1149.8" y="221" width="1.0" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="1152.80" y="231.5" ></text>
+</g>
+<g >
+<title>std::allocator_traits&lt;std::allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt; &gt;::allocate (25,877,342 cache misses, 1.95%)</title><rect x="41.7" y="301" width="23.0" height="15.0" fill="rgb(214,42,10)" rx="2" ry="2" />
+<text  x="44.67" y="311.5" >s..</text>
+</g>
+<g >
+<title>dart::dynamics::Skeleton::clearConstraintImpulses (153,498 cache misses, 0.01%)</title><rect x="1189.8" y="541" width="0.2" height="15.0" fill="rgb(223,82,19)" rx="2" ry="2" />
+<text  x="1192.84" y="551.5" ></text>
+</g>
+<g >
+<title>[unknown] (214,609 cache misses, 0.02%)</title><rect x="332.1" y="285" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="335.06" y="295.5" ></text>
+</g>
+<g >
+<title>[unknown] (214,609 cache misses, 0.02%)</title><rect x="332.1" y="317" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="335.06" y="327.5" ></text>
+</g>
+<g >
+<title>__GI___libc_free (137,806 cache misses, 0.01%)</title><rect x="316.0" y="109" width="0.1" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="319.00" y="119.5" ></text>
+</g>
+<g >
+<title>gz::physics::ExpectData&lt;gz::physics::WorldPoses&gt;::operator= (3,983,409 cache misses, 0.30%)</title><rect x="332.7" y="365" width="3.5" height="15.0" fill="rgb(248,202,48)" rx="2" ry="2" />
+<text  x="335.67" y="375.5" ></text>
+</g>
+<g >
+<title>void gz::sim::v11::EntityComponentManager::ForEach&lt;gz::sim::v11::EntityComponentManager::EntityByComponents&lt;gz::sim::v11::components::Component&lt;std::add_lvalue_reference&lt;void&gt;, gz::sim::v11::components::WorldTag, gz::sim::v11::serializers::DefaultSerializer&lt;std::add_lvalue_reference&lt;void&gt; &gt; &gt; &gt; (124,351 cache misses, 0.01%)</title><rect x="1188.8" y="413" width="0.2" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1191.84" y="423.5" ></text>
+</g>
+<g >
+<title>__GI___libc_free (380,799 cache misses, 0.03%)</title><rect x="301.2" y="237" width="0.3" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="304.16" y="247.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_drop_node (153,686 cache misses, 0.01%)</title><rect x="316.0" y="173" width="0.1" height="15.0" fill="rgb(208,16,3)" rx="2" ry="2" />
+<text  x="318.99" y="183.5" ></text>
+</g>
+<g >
+<title>std::set&lt;unsigned long, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::set (8,190,692 cache misses, 0.62%)</title><rect x="316.6" y="397" width="7.3" height="15.0" fill="rgb(237,148,35)" rx="2" ry="2" />
+<text  x="319.61" y="407.5" ></text>
+</g>
+<g >
+<title>_int_free (870,614 cache misses, 0.07%)</title><rect x="312.8" y="141" width="0.8" height="15.0" fill="rgb(247,196,46)" rx="2" ry="2" />
+<text  x="315.80" y="151.5" ></text>
+</g>
+<g >
+<title>__GI___libc_malloc (1,477,793 cache misses, 0.11%)</title><rect x="322.1" y="237" width="1.3" height="15.0" fill="rgb(219,68,16)" rx="2" ry="2" />
+<text  x="325.11" y="247.5" ></text>
+</g>
+<g >
+<title>unlink_chunk (5,837,919 cache misses, 0.44%)</title><rect x="906.4" y="205" width="5.2" height="15.0" fill="rgb(236,146,34)" rx="2" ry="2" />
+<text  x="909.40" y="215.5" ></text>
+</g>
+<g >
+<title>gz::math::eigen3::convert (9,199,125 cache misses, 0.69%)</title><rect x="1139.3" y="349" width="8.1" height="15.0" fill="rgb(253,224,53)" rx="2" ry="2" />
+<text  x="1142.25" y="359.5" ></text>
+</g>
+<g >
+<title>__scalbn (340,698 cache misses, 0.03%)</title><rect x="837.4" y="221" width="0.3" height="15.0" fill="rgb(235,141,33)" rx="2" ry="2" />
+<text  x="840.39" y="231.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_erase (16,957,318 cache misses, 1.28%)</title><rect x="301.5" y="301" width="15.1" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="304.51" y="311.5" ></text>
+</g>
+<g >
+<title>void gz::physics::CopyMapData&lt;std::_Rb_tree_const_iterator&lt;std::pair&lt;std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt; const, gz::physics::CompositeData::DataEntry&gt; &gt;, std::map&lt;std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt;, gz::physics::CompositeData::DataEntry, std::less&lt;std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt; &gt;, std::allocator&lt;std::pair&lt;std::__cxx11::basic_string&lt;char, std::char_traits&lt;char&gt;, std::allocator&lt;char&gt; &gt; const, gz::physics::CompositeData::DataEntry&gt; &gt; &gt; const&amp;&gt; (3,855,781 cache misses, 0.29%)</title><rect x="332.8" y="317" width="3.4" height="15.0" fill="rgb(217,57,13)" rx="2" ry="2" />
+<text  x="335.78" y="327.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::evaluator&lt;Eigen::Diagonal&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; const, 0&gt; &gt;::coeff (1,820,990 cache misses, 0.14%)</title><rect x="1142.5" y="157" width="1.7" height="15.0" fill="rgb(235,138,33)" rx="2" ry="2" />
+<text  x="1145.53" y="167.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::variable_if_dynamic&lt;long, -1&gt;::variable_if_dynamic (3,406,982 cache misses, 0.26%)</title><rect x="1144.3" y="269" width="3.0" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="1147.26" y="279.5" ></text>
+</g>
+<g >
+<title>[unknown] (214,609 cache misses, 0.02%)</title><rect x="332.1" y="237" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="335.06" y="247.5" ></text>
+</g>
+<g >
+<title>[unknown] (197,820 cache misses, 0.01%)</title><rect x="299.7" y="349" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="302.67" y="359.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, unsigned long, std::_Identity&lt;unsigned long&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::_M_get_insert_hint_unique_pos (1,535,268 cache misses, 0.12%)</title><rect x="318.0" y="349" width="1.3" height="15.0" fill="rgb(223,85,20)" rx="2" ry="2" />
+<text  x="320.98" y="359.5" ></text>
+</g>
+<g >
+<title>__memset_avx2_unaligned_erms (19,629,910 cache misses, 1.48%)</title><rect x="837.7" y="253" width="17.5" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="840.70" y="263.5" ></text>
+</g>
+<g >
+<title>dart::collision::CollisionGroup::updateSkeletonSource (38,543,784 cache misses, 2.91%)</title><rect x="537.1" y="269" width="34.2" height="15.0" fill="rgb(216,52,12)" rx="2" ry="2" />
+<text  x="540.05" y="279.5" >da..</text>
+</g>
+<g >
+<title>dart::dynamics::Frame::getWorldTransform (23,626,411 cache misses, 1.78%)</title><rect x="1118.2" y="349" width="21.1" height="15.0" fill="rgb(253,224,53)" rx="2" ry="2" />
+<text  x="1121.23" y="359.5" ></text>
+</g>
+<g >
+<title>_int_free (690,322 cache misses, 0.05%)</title><rect x="376.2" y="237" width="0.6" height="15.0" fill="rgb(247,196,46)" rx="2" ry="2" />
+<text  x="379.18" y="247.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_erase (17,689,161 cache misses, 1.33%)</title><rect x="300.9" y="333" width="15.7" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="303.86" y="343.5" ></text>
+</g>
+<g >
+<title>std::__new_allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::deallocate (1,107,720 cache misses, 0.08%)</title><rect x="312.6" y="173" width="1.0" height="15.0" fill="rgb(230,115,27)" rx="2" ry="2" />
+<text  x="315.61" y="183.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_erase (12,762,356 cache misses, 0.96%)</title><rect x="305.2" y="269" width="11.4" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="308.24" y="279.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::systems::PhysicsPrivate::Step (928,116,333 cache misses, 69.97%)</title><rect x="336.9" y="397" width="825.7" height="15.0" fill="rgb(218,64,15)" rx="2" ry="2" />
+<text  x="339.90" y="407.5" >gz::sim::v11::systems::PhysicsPrivate::Step</text>
+</g>
+<g >
+<title>operator new (203,633 cache misses, 0.02%)</title><rect x="336.0" y="285" width="0.2" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="338.99" y="295.5" ></text>
+</g>
+<g >
+<title>std::allocator_traits&lt;std::allocator&lt;std::_Rb_tree_node&lt;unsigned long&gt; &gt; &gt;::deallocate (6,789,546 cache misses, 0.51%)</title><rect x="323.9" y="317" width="6.0" height="15.0" fill="rgb(225,96,23)" rx="2" ry="2" />
+<text  x="326.90" y="327.5" ></text>
+</g>
+<g >
+<title>checked_request2size (127,943 cache misses, 0.01%)</title><rect x="904.2" y="205" width="0.2" height="15.0" fill="rgb(252,219,52)" rx="2" ry="2" />
+<text  x="907.24" y="215.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, unsigned long, std::_Identity&lt;unsigned long&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::_M_erase (7,532,292 cache misses, 0.57%)</title><rect x="323.9" y="365" width="6.7" height="15.0" fill="rgb(231,119,28)" rx="2" ry="2" />
+<text  x="326.90" y="375.5" ></text>
+</g>
+<g >
+<title>gz::msgs::Clock::SharedDtor (124,780 cache misses, 0.01%)</title><rect x="330.7" y="381" width="0.1" height="15.0" fill="rgb(216,54,13)" rx="2" ry="2" />
+<text  x="333.68" y="391.5" ></text>
+</g>
+<g >
+<title>[unknown] (185,055 cache misses, 0.01%)</title><rect x="299.7" y="301" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="302.68" y="311.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::systems::PhysicsPrivate::CreateJointEntities (227,238 cache misses, 0.02%)</title><rect x="336.3" y="381" width="0.2" height="15.0" fill="rgb(240,161,38)" rx="2" ry="2" />
+<text  x="339.33" y="391.5" ></text>
+</g>
+<g >
+<title>std::_Hashtable&lt;unsigned long, std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, std::allocator&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt; &gt;, std::__detail::_Select1st, std::equal_to&lt;unsigned long&gt;, std::hash&lt;unsigned long&gt;, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits&lt;false, false, true&gt; &gt;::_M_allocate_buckets (338,862 cache misses, 0.03%)</title><rect x="1152.3" y="269" width="0.3" height="15.0" fill="rgb(218,61,14)" rx="2" ry="2" />
+<text  x="1155.30" y="279.5" ></text>
+</g>
+<g >
+<title>void Eigen::internal::call_assignment_no_alias&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt;, Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt;, Eigen::internal::assign_op&lt;double, double&gt; &gt; (2,837,621 cache misses, 0.21%)</title><rect x="1036.0" y="269" width="2.6" height="15.0" fill="rgb(225,96,23)" rx="2" ry="2" />
+<text  x="1039.05" y="279.5" ></text>
+</g>
+<g >
+<title>tcache_get_n (259,866 cache misses, 0.02%)</title><rect x="64.1" y="221" width="0.2" height="15.0" fill="rgb(229,110,26)" rx="2" ry="2" />
+<text  x="67.07" y="231.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::Skeleton::getNumDofs (4,984,904 cache misses, 0.38%)</title><rect x="489.9" y="333" width="4.4" height="15.0" fill="rgb(231,121,29)" rx="2" ry="2" />
+<text  x="492.86" y="343.5" ></text>
+</g>
+<g >
+<title>__futex_abstimed_wait_common (214,609 cache misses, 0.02%)</title><rect x="332.1" y="349" width="0.1" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="335.06" y="359.5" ></text>
+</g>
+<g >
+<title>std::unordered_set&lt;unsigned long, std::hash&lt;unsigned long&gt;, std::equal_to&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::clear (2,317,631 cache misses, 0.17%)</title><rect x="10.6" y="413" width="2.1" height="15.0" fill="rgb(216,53,12)" rx="2" ry="2" />
+<text  x="13.62" y="423.5" ></text>
+</g>
+<g >
+<title>[unknown] (197,529 cache misses, 0.01%)</title><rect x="332.1" y="173" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="335.07" y="183.5" ></text>
+</g>
+<g >
+<title>std::function&lt;bool  (248,633 cache misses, 0.02%)</title><rect x="1187.1" y="381" width="0.2" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="1190.10" y="391.5" ></text>
+</g>
+<g >
+<title>std::set&lt;unsigned long, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::~set (7,532,292 cache misses, 0.57%)</title><rect x="323.9" y="397" width="6.7" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="326.90" y="407.5" ></text>
+</g>
+<g >
+<title>gz::math::eigen3::convert (166,456 cache misses, 0.01%)</title><rect x="1147.3" y="333" width="0.1" height="15.0" fill="rgb(253,224,53)" rx="2" ry="2" />
+<text  x="1150.29" y="343.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree_insert_and_rebalance (859,943 cache misses, 0.06%)</title><rect x="64.7" y="317" width="0.8" height="15.0" fill="rgb(225,94,22)" rx="2" ry="2" />
+<text  x="67.75" y="327.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::Barrier::Wait (397,669 cache misses, 0.03%)</title><rect x="331.9" y="413" width="0.4" height="15.0" fill="rgb(232,127,30)" rx="2" ry="2" />
+<text  x="334.93" y="423.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_drop_node (684,047 cache misses, 0.05%)</title><rect x="315.1" y="205" width="0.6" height="15.0" fill="rgb(208,16,3)" rx="2" ry="2" />
+<text  x="318.10" y="215.5" ></text>
+</g>
+<g >
+<title>[unknown] (122,918 cache misses, 0.01%)</title><rect x="331.9" y="269" width="0.2" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="334.95" y="279.5" ></text>
+</g>
+<g >
+<title>[unknown] (122,918 cache misses, 0.01%)</title><rect x="331.9" y="365" width="0.2" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="334.95" y="375.5" ></text>
+</g>
+<g >
+<title>void Eigen::internal::assign_op&lt;double, double&gt;::assignPacket&lt;16, double __vector (1,158,172 cache misses, 0.09%)</title><rect x="1036.8" y="189" width="1.0" height="15.0" fill="rgb(207,10,2)" rx="2" ry="2" />
+<text  x="1039.78" y="199.5" ></text>
+</g>
+<g >
+<title>__GI___libc_free (450,146 cache misses, 0.03%)</title><rect x="777.2" y="237" width="0.4" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="780.19" y="247.5" ></text>
+</g>
+<g >
+<title>std::__detail::_Hashtable_alloc&lt;std::allocator&lt;std::__detail::_Hash_node&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, false&gt; &gt; &gt;::_M_deallocate_node (1,184,779 cache misses, 0.09%)</title><rect x="1149.8" y="285" width="1.1" height="15.0" fill="rgb(236,143,34)" rx="2" ry="2" />
+<text  x="1152.80" y="295.5" ></text>
+</g>
+<g >
+<title>tcache_get_n (119,659 cache misses, 0.01%)</title><rect x="911.6" y="205" width="0.1" height="15.0" fill="rgb(229,110,26)" rx="2" ry="2" />
+<text  x="914.60" y="215.5" ></text>
+</g>
+<g >
+<title>[libdart.so.6.13.2] (124,885 cache misses, 0.01%)</title><rect x="981.0" y="301" width="0.1" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="983.96" y="311.5" ></text>
+</g>
+<g >
+<title>gz-sim-main (1,326,392,540 cache misses, 100.00%)</title><rect x="10.0" y="557" width="1180.0" height="15.0" fill="rgb(233,132,31)" rx="2" ry="2" />
+<text  x="13.00" y="567.5" >gz-sim-main</text>
+</g>
+<g >
+<title>dart::dynamics::Skeleton::setGravity (25,815,673 cache misses, 1.95%)</title><rect x="1163.0" y="285" width="23.0" height="15.0" fill="rgb(232,127,30)" rx="2" ry="2" />
+<text  x="1165.98" y="295.5" >d..</text>
+</g>
+<g >
+<title>__pthread_cond_wait_common (223,727 cache misses, 0.02%)</title><rect x="332.1" y="381" width="0.2" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="335.06" y="391.5" ></text>
+</g>
+<g >
+<title>dRfromQ (3,146,314 cache misses, 0.24%)</title><rect x="598.6" y="221" width="2.8" height="15.0" fill="rgb(248,198,47)" rx="2" ry="2" />
+<text  x="601.57" y="231.5" ></text>
+</g>
+<g >
+<title>dBodySetPosition (1,912,865 cache misses, 0.14%)</title><rect x="595.6" y="237" width="1.7" height="15.0" fill="rgb(248,199,47)" rx="2" ry="2" />
+<text  x="598.64" y="247.5" ></text>
+</g>
+<g >
+<title>Eigen::Quaternion&lt;double, 0&gt;::Quaternion&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; &gt; (5,633,889 cache misses, 0.42%)</title><rect x="1085.8" y="253" width="5.0" height="15.0" fill="rgb(253,225,53)" rx="2" ry="2" />
+<text  x="1088.79" y="263.5" ></text>
+</g>
+<g >
+<title>__GI___libc_malloc (119,315 cache misses, 0.01%)</title><rect x="10.0" y="525" width="0.1" height="15.0" fill="rgb(219,68,16)" rx="2" ry="2" />
+<text  x="13.00" y="535.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::BlockImpl_dense&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false, true&gt;::BlockImpl_dense (624,255 cache misses, 0.05%)</title><rect x="1090.8" y="205" width="0.6" height="15.0" fill="rgb(214,43,10)" rx="2" ry="2" />
+<text  x="1093.80" y="215.5" ></text>
+</g>
+<g >
+<title>__dynamic_cast (2,265,385 cache misses, 0.17%)</title><rect x="569.2" y="253" width="2.0" height="15.0" fill="rgb(227,102,24)" rx="2" ry="2" />
+<text  x="572.23" y="263.5" ></text>
+</g>
+<g >
+<title>double Eigen::internal::redux_impl&lt;Eigen::internal::scalar_sum_op&lt;double, double&gt;, Eigen::internal::redux_evaluator&lt;Eigen::Diagonal&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; const, 0&gt; &gt;, 0, 2&gt;::run&lt;Eigen::Diagonal&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; const, 0&gt; &gt; (1,569,356 cache misses, 0.12%)</title><rect x="1089.4" y="157" width="1.4" height="15.0" fill="rgb(228,109,26)" rx="2" ry="2" />
+<text  x="1092.40" y="167.5" ></text>
+</g>
+<g >
+<title>[unknown] (123,784 cache misses, 0.01%)</title><rect x="299.7" y="253" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="302.74" y="263.5" ></text>
+</g>
+<g >
+<title>dart::constraint::ConstraintSolver::solve (189,033 cache misses, 0.01%)</title><rect x="1189.6" y="541" width="0.1" height="15.0" fill="rgb(218,60,14)" rx="2" ry="2" />
+<text  x="1192.57" y="551.5" ></text>
+</g>
+<g >
+<title>dBodySetQuaternion (13,352,877 cache misses, 1.01%)</title><rect x="597.4" y="237" width="11.9" height="15.0" fill="rgb(248,198,47)" rx="2" ry="2" />
+<text  x="600.42" y="247.5" ></text>
+</g>
+<g >
+<title>__memset_avx2_unaligned_erms (182,348 cache misses, 0.01%)</title><rect x="1152.3" y="237" width="0.2" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="1155.30" y="247.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::systems::PhysicsPrivate::UpdateSim (1,574,089 cache misses, 0.12%)</title><rect x="1186.8" y="397" width="1.4" height="15.0" fill="rgb(214,45,10)" rx="2" ry="2" />
+<text  x="1189.78" y="407.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::mapbase_evaluator&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt;, Eigen::Matrix&lt;double, 3, 3, 0, 3, 3&gt; &gt;::coeff (1,318,496 cache misses, 0.10%)</title><rect x="1089.5" y="61" width="1.2" height="15.0" fill="rgb(251,215,51)" rx="2" ry="2" />
+<text  x="1092.48" y="71.5" ></text>
+</g>
+<g >
+<title>MaybeGilScopedRelease (131,277 cache misses, 0.01%)</title><rect x="331.8" y="413" width="0.1" height="15.0" fill="rgb(218,63,15)" rx="2" ry="2" />
+<text  x="334.80" y="423.5" ></text>
+</g>
+<g >
+<title>std::__detail::_Hash_node&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, false&gt;* std::__detail::_Hashtable_alloc&lt;std::allocator&lt;std::__detail::_Hash_node&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, false&gt; &gt; &gt;::_M_allocate_node&lt;std::piecewise_construct_t const&amp;, std::tuple&lt;unsigned long const&amp;&gt;, std::tuple&lt;&gt; &gt; (10,651,482 cache misses, 0.80%)</title><rect x="1153.0" y="301" width="9.5" height="15.0" fill="rgb(208,15,3)" rx="2" ry="2" />
+<text  x="1156.02" y="311.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::systems::PhysicsPrivate::UpdatePhysics (26,434,118 cache misses, 1.99%)</title><rect x="1162.9" y="317" width="23.5" height="15.0" fill="rgb(209,21,5)" rx="2" ry="2" />
+<text  x="1165.87" y="327.5" >g..</text>
+</g>
+<g >
+<title>__libc_start_call_main (1,325,066,450 cache misses, 99.90%)</title><rect x="10.1" y="509" width="1178.9" height="15.0" fill="rgb(210,26,6)" rx="2" ry="2" />
+<text  x="13.15" y="519.5" >__libc_start_call_main</text>
+</g>
+<g >
+<title>_int_malloc (10,190,837 cache misses, 0.77%)</title><rect x="1098.0" y="157" width="9.0" height="15.0" fill="rgb(215,47,11)" rx="2" ry="2" />
+<text  x="1100.96" y="167.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::Skeleton::isMobile (3,509,834 cache misses, 0.26%)</title><rect x="1029.5" y="333" width="3.1" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="1032.50" y="343.5" ></text>
+</g>
+<g >
+<title>unsigned long gz::sim::v11::EntityComponentManager::EntityByComponents&lt;gz::sim::v11::components::Component&lt;std::add_lvalue_reference&lt;void&gt;, gz::sim::v11::components::WorldTag, gz::sim::v11::serializers::DefaultSerializer&lt;std::add_lvalue_reference&lt;void&gt; &gt; &gt; &gt; (257,212 cache misses, 0.02%)</title><rect x="1188.7" y="429" width="0.3" height="15.0" fill="rgb(254,226,54)" rx="2" ry="2" />
+<text  x="1191.72" y="439.5" ></text>
+</g>
+<g >
+<title>tcache_get (585,662 cache misses, 0.04%)</title><rect x="322.9" y="221" width="0.5" height="15.0" fill="rgb(253,222,53)" rx="2" ry="2" />
+<text  x="325.90" y="231.5" ></text>
+</g>
+<g >
+<title>__GI___libc_free (1,200,008 cache misses, 0.09%)</title><rect x="301.9" y="221" width="1.0" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="304.87" y="231.5" ></text>
+</g>
+<g >
+<title>operator new (18,295,813 cache misses, 1.38%)</title><rect x="895.6" y="253" width="16.3" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="898.61" y="263.5" ></text>
+</g>
+<g >
+<title>malloc@plt (199,195 cache misses, 0.02%)</title><rect x="911.7" y="237" width="0.2" height="15.0" fill="rgb(246,192,46)" rx="2" ry="2" />
+<text  x="914.70" y="247.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::systems::PhysicsPrivate::CreatePhysicsEntities (729,856 cache misses, 0.06%)</title><rect x="336.2" y="397" width="0.7" height="15.0" fill="rgb(249,205,49)" rx="2" ry="2" />
+<text  x="339.21" y="407.5" ></text>
+</g>
+<g >
+<title>Eigen::Transform&lt;double, 3, 1, 0&gt;::linear (3,406,982 cache misses, 0.26%)</title><rect x="1144.3" y="333" width="3.0" height="15.0" fill="rgb(215,49,11)" rx="2" ry="2" />
+<text  x="1147.26" y="343.5" ></text>
+</g>
+<g >
+<title>std::__new_allocator&lt;std::__detail::_Hash_node&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, false&gt; &gt;::allocate (10,651,482 cache misses, 0.80%)</title><rect x="1153.0" y="269" width="9.5" height="15.0" fill="rgb(207,10,2)" rx="2" ry="2" />
+<text  x="1156.02" y="279.5" ></text>
+</g>
+<g >
+<title>[libode.so.8.0.2] (57,457,148 cache misses, 4.33%)</title><rect x="776.9" y="253" width="51.1" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="779.86" y="263.5" >[libo..</text>
+</g>
+<g >
+<title>__GI___libc_free (1,072,075 cache misses, 0.08%)</title><rect x="312.6" y="157" width="1.0" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="315.62" y="167.5" ></text>
+</g>
+<g >
+<title>__GI___libc_malloc (24,928,459 cache misses, 1.88%)</title><rect x="42.1" y="253" width="22.2" height="15.0" fill="rgb(219,68,16)" rx="2" ry="2" />
+<text  x="45.13" y="263.5" >_..</text>
+</g>
+<g >
+<title>Eigen::Quaternion&lt;double, 0&gt;::Quaternion&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; &gt; (5,520,186 cache misses, 0.42%)</title><rect x="1139.3" y="333" width="5.0" height="15.0" fill="rgb(253,225,53)" rx="2" ry="2" />
+<text  x="1142.35" y="343.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::SimulationRunner::ProcessSystemQueue (171,441 cache misses, 0.01%)</title><rect x="1189.0" y="493" width="0.1" height="15.0" fill="rgb(238,152,36)" rx="2" ry="2" />
+<text  x="1191.97" y="503.5" ></text>
+</g>
+<g >
+<title>_int_free (442,749 cache misses, 0.03%)</title><rect x="777.2" y="221" width="0.4" height="15.0" fill="rgb(247,196,46)" rx="2" ry="2" />
+<text  x="780.20" y="231.5" ></text>
+</g>
+<g >
+<title>_int_free (1,588,270 cache misses, 0.12%)</title><rect x="306.7" y="173" width="1.4" height="15.0" fill="rgb(247,196,46)" rx="2" ry="2" />
+<text  x="309.73" y="183.5" ></text>
+</g>
+<g >
+<title>start_thread (376,076 cache misses, 0.03%)</title><rect x="1189.0" y="525" width="0.3" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="1191.97" y="535.5" ></text>
+</g>
+<g >
+<title>malloc@plt (434,776 cache misses, 0.03%)</title><rect x="64.3" y="253" width="0.4" height="15.0" fill="rgb(246,192,46)" rx="2" ry="2" />
+<text  x="67.31" y="263.5" ></text>
+</g>
+<g >
+<title>google::protobuf::Message::GetTypeName[abi:cxx11] (301,068 cache misses, 0.02%)</title><rect x="331.1" y="397" width="0.2" height="15.0" fill="rgb(207,10,2)" rx="2" ry="2" />
+<text  x="334.06" y="407.5" ></text>
+</g>
+<g >
+<title>void std::_Construct&lt;gz::physics::WorldPose, gz::physics::WorldPose const&amp;&gt; (3,602,457 cache misses, 0.27%)</title><rect x="332.8" y="173" width="3.2" height="15.0" fill="rgb(235,140,33)" rx="2" ry="2" />
+<text  x="335.79" y="183.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_put_node (1,107,720 cache misses, 0.08%)</title><rect x="312.6" y="205" width="1.0" height="15.0" fill="rgb(252,220,52)" rx="2" ry="2" />
+<text  x="315.61" y="215.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::SimulationRunner::Run (1,325,066,450 cache misses, 99.90%)</title><rect x="10.1" y="461" width="1178.9" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="13.15" y="471.5" >gz::sim::v11::SimulationRunner::Run</text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_drop_node (202,538 cache misses, 0.02%)</title><rect x="300.9" y="317" width="0.1" height="15.0" fill="rgb(208,16,3)" rx="2" ry="2" />
+<text  x="303.86" y="327.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree_iterator&lt;unsigned long&gt; std::_Rb_tree&lt;unsigned long, unsigned long, std::_Identity&lt;unsigned long&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::_M_insert_&lt;unsigned long const&amp;, std::_Rb_tree&lt;unsigned long, unsigned long, std::_Identity&lt;unsigned long&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::_Alloc_node&gt; (5,120,306 cache misses, 0.39%)</title><rect x="319.3" y="349" width="4.6" height="15.0" fill="rgb(253,224,53)" rx="2" ry="2" />
+<text  x="322.34" y="359.5" ></text>
+</g>
+<g >
+<title>___pthread_cond_broadcast (122,918 cache misses, 0.01%)</title><rect x="331.9" y="397" width="0.2" height="15.0" fill="rgb(208,15,3)" rx="2" ry="2" />
+<text  x="334.95" y="407.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::aligned_free (1,117,220 cache misses, 0.08%)</title><rect x="375.9" y="269" width="1.0" height="15.0" fill="rgb(209,21,5)" rx="2" ry="2" />
+<text  x="378.86" y="279.5" ></text>
+</g>
+<g >
+<title>std::_Hashtable&lt;unsigned long, std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, std::allocator&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt; &gt;, std::__detail::_Select1st, std::equal_to&lt;unsigned long&gt;, std::hash&lt;unsigned long&gt;, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits&lt;false, false, true&gt; &gt;::_Scoped_node::_Scoped_node&lt;std::piecewise_construct_t const&amp;, std::tuple&lt;unsigned long const&amp;&gt;, std::tuple&lt;&gt; &gt; (10,651,482 cache misses, 0.80%)</title><rect x="1153.0" y="317" width="9.5" height="15.0" fill="rgb(230,119,28)" rx="2" ry="2" />
+<text  x="1156.02" y="327.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, unsigned long, std::_Identity&lt;unsigned long&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::_M_get_node (3,773,172 cache misses, 0.28%)</title><rect x="320.5" y="301" width="3.4" height="15.0" fill="rgb(234,137,32)" rx="2" ry="2" />
+<text  x="323.54" y="311.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_Auto_node::_M_insert (919,847 cache misses, 0.07%)</title><rect x="64.7" y="349" width="0.8" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="67.69" y="359.5" ></text>
+</g>
+<g >
+<title>[unknown] (214,609 cache misses, 0.02%)</title><rect x="332.1" y="301" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="335.06" y="311.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::systems::PhysicsPrivate::UpdatePhysics (27,199,684 cache misses, 2.05%)</title><rect x="1162.6" y="397" width="24.2" height="15.0" fill="rgb(209,21,5)" rx="2" ry="2" />
+<text  x="1165.58" y="407.5" >g..</text>
+</g>
+<g >
+<title>dart::dynamics::Skeleton::clearCollidingBodies (1,219,531 cache misses, 0.09%)</title><rect x="956.3" y="317" width="1.1" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="959.28" y="327.5" ></text>
+</g>
+<g >
+<title>std::allocator_traits&lt;std::allocator&lt;gz::physics::WorldPose&gt; &gt;::allocate (10,194,924 cache misses, 0.77%)</title><rect x="1098.0" y="221" width="9.0" height="15.0" fill="rgb(215,49,11)" rx="2" ry="2" />
+<text  x="1100.95" y="231.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_drop_node (1,674,150 cache misses, 0.13%)</title><rect x="303.7" y="269" width="1.5" height="15.0" fill="rgb(208,16,3)" rx="2" ry="2" />
+<text  x="306.75" y="279.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::mapbase_evaluator&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 1, true&gt;, Eigen::Matrix&lt;double, 3, 1, 0, 3, 1&gt; &gt;::coeff (3,831,406 cache misses, 0.29%)</title><rect x="1082.4" y="93" width="3.4" height="15.0" fill="rgb(225,92,22)" rx="2" ry="2" />
+<text  x="1085.38" y="103.5" ></text>
+</g>
+<g >
+<title>std::__detail::_Prime_rehash_policy::_M_need_rehash (211,159 cache misses, 0.02%)</title><rect x="1152.8" y="301" width="0.2" height="15.0" fill="rgb(228,109,26)" rx="2" ry="2" />
+<text  x="1155.83" y="311.5" ></text>
+</g>
+<g >
+<title>std::allocator_traits&lt;std::allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt; &gt;::deallocate (396,640 cache misses, 0.03%)</title><rect x="301.2" y="269" width="0.3" height="15.0" fill="rgb(215,50,12)" rx="2" ry="2" />
+<text  x="304.16" y="279.5" ></text>
+</g>
+<g >
+<title>gz::math::eigen3::convert (4,291,427 cache misses, 0.32%)</title><rect x="1091.4" y="253" width="3.8" height="15.0" fill="rgb(253,224,53)" rx="2" ry="2" />
+<text  x="1094.35" y="263.5" ></text>
+</g>
+<g >
+<title>malloc@plt (149,273 cache misses, 0.01%)</title><rect x="409.9" y="317" width="0.2" height="15.0" fill="rgb(246,192,46)" rx="2" ry="2" />
+<text  x="412.94" y="327.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_put_node (396,640 cache misses, 0.03%)</title><rect x="301.2" y="285" width="0.3" height="15.0" fill="rgb(252,220,52)" rx="2" ry="2" />
+<text  x="304.16" y="295.5" ></text>
+</g>
+<g >
+<title>__GI___libc_free (674,520 cache misses, 0.05%)</title><rect x="315.1" y="141" width="0.6" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="318.10" y="151.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, unsigned long, std::_Identity&lt;unsigned long&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::clear (426,438 cache misses, 0.03%)</title><rect x="10.2" y="381" width="0.4" height="15.0" fill="rgb(213,41,9)" rx="2" ry="2" />
+<text  x="13.24" y="391.5" ></text>
+</g>
+<g >
+<title>_int_malloc (21,332,763 cache misses, 1.61%)</title><rect x="45.1" y="237" width="19.0" height="15.0" fill="rgb(215,47,11)" rx="2" ry="2" />
+<text  x="48.08" y="247.5" ></text>
+</g>
+<g >
+<title>std::_Hashtable&lt;unsigned long, std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, std::allocator&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt; &gt;, std::__detail::_Select1st, std::equal_to&lt;unsigned long&gt;, std::hash&lt;unsigned long&gt;, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits&lt;false, false, true&gt; &gt;::operator= (1,184,779 cache misses, 0.09%)</title><rect x="1149.8" y="333" width="1.1" height="15.0" fill="rgb(225,92,22)" rx="2" ry="2" />
+<text  x="1152.80" y="343.5" ></text>
+</g>
+<g >
+<title>gz::physics::Gravity::World&lt;gz::physics::FeaturePolicy&lt;double, 3ul&gt;, gz::sim::v11::systems::PhysicsPrivate::GravityFeatureList&gt;::SetGravity (199,197 cache misses, 0.02%)</title><rect x="1186.2" y="301" width="0.2" height="15.0" fill="rgb(253,222,53)" rx="2" ry="2" />
+<text  x="1189.18" y="311.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::EntityComponentManager::HasComponentType (187,438 cache misses, 0.01%)</title><rect x="1186.8" y="365" width="0.1" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="1189.78" y="375.5" ></text>
+</g>
+<g >
+<title>std::_Hashtable&lt;unsigned long, unsigned long, std::allocator&lt;unsigned long&gt;, std::__detail::_Identity, std::equal_to&lt;unsigned long&gt;, std::hash&lt;unsigned long&gt;, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits&lt;false, true, true&gt; &gt;::find (165,613 cache misses, 0.01%)</title><rect x="1186.8" y="333" width="0.1" height="15.0" fill="rgb(213,38,9)" rx="2" ry="2" />
+<text  x="1189.80" y="343.5" ></text>
+</g>
+<g >
+<title>__GI___libc_malloc (136,754 cache misses, 0.01%)</title><rect x="1152.5" y="189" width="0.1" height="15.0" fill="rgb(219,68,16)" rx="2" ry="2" />
+<text  x="1155.48" y="199.5" ></text>
+</g>
+<g >
+<title>std::vector&lt;gz::physics::WorldPose, std::allocator&lt;gz::physics::WorldPose&gt; &gt;::reserve (10,194,924 cache misses, 0.77%)</title><rect x="1098.0" y="269" width="9.0" height="15.0" fill="rgb(222,81,19)" rx="2" ry="2" />
+<text  x="1100.95" y="279.5" ></text>
+</g>
+<g >
+<title>Eigen::Transform&lt;double, 3, 1, 0&gt;::linear (624,255 cache misses, 0.05%)</title><rect x="1090.8" y="253" width="0.6" height="15.0" fill="rgb(215,49,11)" rx="2" ry="2" />
+<text  x="1093.80" y="263.5" ></text>
+</g>
+<g >
+<title>[unknown] (214,609 cache misses, 0.02%)</title><rect x="332.1" y="253" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="335.06" y="263.5" ></text>
+</g>
+<g >
+<title>std::unordered_map&lt;unsigned long, std::unordered_map&lt;unsigned long, unsigned long, std::hash&lt;unsigned long&gt;, std::equal_to&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, unsigned long&gt; &gt; &gt;, std::hash&lt;unsigned long&gt;, std::equal_to&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::unordered_map&lt;unsigned long, unsigned long, std::hash&lt;unsigned long&gt;, std::equal_to&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, unsigned long&gt; &gt; &gt; &gt; &gt; &gt;::find (32,457,799 cache misses, 2.45%)</title><rect x="85.8" y="381" width="28.9" height="15.0" fill="rgb(227,102,24)" rx="2" ry="2" />
+<text  x="88.78" y="391.5" >st..</text>
+</g>
+<g >
+<title>std::_Rb_tree_const_iterator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;::operator++ (1,055,268 cache misses, 0.08%)</title><rect x="299.8" y="397" width="1.0" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="302.85" y="407.5" ></text>
+</g>
+<g >
+<title>_int_free (870,890 cache misses, 0.07%)</title><rect x="302.2" y="205" width="0.7" height="15.0" fill="rgb(247,196,46)" rx="2" ry="2" />
+<text  x="305.16" y="215.5" ></text>
+</g>
+<g >
+<title>operator new (25,877,342 cache misses, 1.95%)</title><rect x="41.7" y="269" width="23.0" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="44.67" y="279.5" >o..</text>
+</g>
+<g >
+<title>dart::dynamics::Skeleton::dirtySupportPolygon (290,559 cache misses, 0.02%)</title><rect x="1185.7" y="269" width="0.3" height="15.0" fill="rgb(230,119,28)" rx="2" ry="2" />
+<text  x="1188.69" y="279.5" ></text>
+</g>
+<g >
+<title>google::protobuf::internal::AssignDescriptors (157,583 cache misses, 0.01%)</title><rect x="331.1" y="381" width="0.2" height="15.0" fill="rgb(229,112,26)" rx="2" ry="2" />
+<text  x="334.15" y="391.5" ></text>
+</g>
+<g >
+<title>operator new (3,773,172 cache misses, 0.28%)</title><rect x="320.5" y="253" width="3.4" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="323.54" y="263.5" ></text>
+</g>
+<g >
+<title>void Eigen::internal::call_assignment&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt;, Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt; &gt; (2,837,621 cache misses, 0.21%)</title><rect x="1036.0" y="301" width="2.6" height="15.0" fill="rgb(211,27,6)" rx="2" ry="2" />
+<text  x="1039.05" y="311.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_erase (244,130 cache misses, 0.02%)</title><rect x="316.1" y="173" width="0.2" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="319.12" y="183.5" ></text>
+</g>
+<g >
+<title>std::vector&lt;gz::physics::WorldPose, std::allocator&lt;gz::physics::WorldPose&gt; &gt;::operator= (3,602,457 cache misses, 0.27%)</title><rect x="332.8" y="269" width="3.2" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="335.79" y="279.5" ></text>
+</g>
+<g >
+<title>__GI___libc_free (202,538 cache misses, 0.02%)</title><rect x="300.9" y="253" width="0.1" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="303.86" y="263.5" ></text>
+</g>
+<g >
+<title>dart::dynamics::BodyNode::clearConstraintImpulse (54,408,586 cache misses, 4.10%)</title><rect x="981.1" y="301" width="48.4" height="15.0" fill="rgb(232,126,30)" rx="2" ry="2" />
+<text  x="984.07" y="311.5" >dart..</text>
+</g>
+<g >
+<title>std::pair&lt;std::_Rb_tree_iterator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, bool&gt; std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_emplace_unique&lt;std::pair&lt;unsigned long, gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&amp;&gt; &gt; (43,410,606 cache misses, 3.27%)</title><rect x="41.4" y="365" width="38.7" height="15.0" fill="rgb(208,15,3)" rx="2" ry="2" />
+<text  x="44.44" y="375.5" >std..</text>
+</g>
+<g >
+<title>alloc_perturb (136,245 cache misses, 0.01%)</title><rect x="1160.3" y="205" width="0.1" height="15.0" fill="rgb(234,134,32)" rx="2" ry="2" />
+<text  x="1163.30" y="215.5" ></text>
+</g>
+<g >
+<title>std::_Vector_base&lt;gz::physics::WorldPose, std::allocator&lt;gz::physics::WorldPose&gt; &gt;::_M_allocate (10,194,924 cache misses, 0.77%)</title><rect x="1098.0" y="253" width="9.0" height="15.0" fill="rgb(250,210,50)" rx="2" ry="2" />
+<text  x="1100.95" y="263.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::SimulationRunner::PublishStats (1,285,152 cache misses, 0.10%)</title><rect x="330.6" y="429" width="1.1" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="333.60" y="439.5" ></text>
+</g>
+<g >
+<title>dxSafeNormalize4 (8,914,686 cache misses, 0.67%)</title><rect x="601.4" y="221" width="7.9" height="15.0" fill="rgb(227,104,24)" rx="2" ry="2" />
+<text  x="604.36" y="231.5" ></text>
+</g>
+<g >
+<title>Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt;::Block (3,406,982 cache misses, 0.26%)</title><rect x="1144.3" y="317" width="3.0" height="15.0" fill="rgb(240,164,39)" rx="2" ry="2" />
+<text  x="1147.26" y="327.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree_node&lt;unsigned long&gt;* std::_Rb_tree&lt;unsigned long, unsigned long, std::_Identity&lt;unsigned long&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::_Alloc_node::operator (3,773,172 cache misses, 0.28%)</title><rect x="320.5" y="333" width="3.4" height="15.0" fill="rgb(249,204,49)" rx="2" ry="2" />
+<text  x="323.54" y="343.5" ></text>
+</g>
+<g >
+<title>void Eigen::internal::call_assignment_no_alias&lt;Eigen::Matrix&lt;double, 3, 1, 0, 3, 1&gt;, Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 1, true&gt;, Eigen::internal::assign_op&lt;double, double&gt; &gt; (3,831,406 cache misses, 0.29%)</title><rect x="1082.4" y="205" width="3.4" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="1085.38" y="215.5" ></text>
+</g>
+<g >
+<title>tcache_get (119,659 cache misses, 0.01%)</title><rect x="911.6" y="221" width="0.1" height="15.0" fill="rgb(253,222,53)" rx="2" ry="2" />
+<text  x="914.60" y="231.5" ></text>
+</g>
+<g >
+<title>std::__detail::_Node_iterator_base&lt;std::pair&lt;unsigned long const, std::shared_ptr&lt;gz::physics::dartsim::LinkInfo&gt; &gt;, false&gt;::_M_incr (421,748 cache misses, 0.03%)</title><rect x="1095.2" y="253" width="0.3" height="15.0" fill="rgb(207,12,2)" rx="2" ry="2" />
+<text  x="1098.17" y="263.5" ></text>
+</g>
+<g >
+<title>Eigen::DenseBase&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt; &gt;::hasNaN (746,994 cache misses, 0.06%)</title><rect x="375.2" y="349" width="0.7" height="15.0" fill="rgb(228,107,25)" rx="2" ry="2" />
+<text  x="378.20" y="359.5" ></text>
+</g>
+<g >
+<title>void Eigen::PlainObjectBase&lt;Eigen::Matrix&lt;double, 3, 1, 0, 3, 1&gt; &gt;::_init1&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 1, true&gt;, Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 1, true&gt; &gt; (3,831,406 cache misses, 0.29%)</title><rect x="1082.4" y="237" width="3.4" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="1085.38" y="247.5" ></text>
+</g>
+<g >
+<title>std::allocator_traits&lt;std::allocator&lt;std::__detail::_Hash_node_base*&gt; &gt;::allocate (156,514 cache misses, 0.01%)</title><rect x="1152.5" y="237" width="0.1" height="15.0" fill="rgb(222,78,18)" rx="2" ry="2" />
+<text  x="1155.47" y="247.5" ></text>
+</g>
+<g >
+<title>std::__detail::_Node_const_iterator&lt;std::pair&lt;unsigned long const, std::shared_ptr&lt;gz::physics::dartsim::LinkInfo&gt; &gt;, false, false&gt;::operator++ (421,748 cache misses, 0.03%)</title><rect x="1095.2" y="269" width="0.3" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="1098.17" y="279.5" ></text>
+</g>
+<g >
+<title>std::__new_allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::deallocate (1,216,136 cache misses, 0.09%)</title><rect x="301.9" y="237" width="1.1" height="15.0" fill="rgb(230,115,27)" rx="2" ry="2" />
+<text  x="304.87" y="247.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, unsigned long, std::_Identity&lt;unsigned long&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::_M_drop_node (6,789,546 cache misses, 0.51%)</title><rect x="323.9" y="349" width="6.0" height="15.0" fill="rgb(229,111,26)" rx="2" ry="2" />
+<text  x="326.90" y="359.5" ></text>
+</g>
+<g >
+<title>unlink_chunk (2,096,512 cache misses, 0.16%)</title><rect x="1160.6" y="205" width="1.8" height="15.0" fill="rgb(236,146,34)" rx="2" ry="2" />
+<text  x="1163.57" y="215.5" ></text>
+</g>
+<g >
+<title>dart::collision::CollisionGroup::collide (38,728,982 cache misses, 2.92%)</title><rect x="536.9" y="301" width="34.4" height="15.0" fill="rgb(235,141,33)" rx="2" ry="2" />
+<text  x="539.89" y="311.5" >da..</text>
+</g>
+<g >
+<title>gz::sim::v11::SimulationRunner::UpdateSystems (962,991,211 cache misses, 72.60%)</title><rect x="331.7" y="429" width="856.8" height="15.0" fill="rgb(236,142,34)" rx="2" ry="2" />
+<text  x="334.74" y="439.5" >gz::sim::v11::SimulationRunner::UpdateSystems</text>
+</g>
+<g >
+<title>dart::dynamics::DegreeOfFreedom::getPosition (68,630,443 cache misses, 5.17%)</title><rect x="410.1" y="333" width="61.1" height="15.0" fill="rgb(221,76,18)" rx="2" ry="2" />
+<text  x="413.15" y="343.5" >dart::..</text>
+</g>
+<g >
+<title>bool gz::sim::v11::detail::applyFunctionImpl&lt;gz::sim::v11::components::Component&lt;gz::math::v10::Vector3&lt;double&gt;, gz::sim::v11::components::GravityTag, gz::sim::v11::serializers::DefaultSerializer&lt;gz::math::v10::Vector3&lt;double&gt; &gt; &gt;, std::function&lt;bool  (26,434,118 cache misses, 1.99%)</title><rect x="1162.9" y="349" width="23.5" height="15.0" fill="rgb(226,97,23)" rx="2" ry="2" />
+<text  x="1165.87" y="359.5" >b..</text>
+</g>
+<g >
+<title>std::_Hashtable&lt;unsigned long, std::pair&lt;unsigned long const, std::unordered_map&lt;unsigned long, unsigned long, std::hash&lt;unsigned long&gt;, std::equal_to&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, unsigned long&gt; &gt; &gt; &gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::unordered_map&lt;unsigned long, unsigned long, std::hash&lt;unsigned long&gt;, std::equal_to&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, unsigned long&gt; &gt; &gt; &gt; &gt;, std::__detail::_Select1st, std::equal_to&lt;unsigned long&gt;, std::hash&lt;unsigned long&gt;, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits&lt;false, false, true&gt; &gt;::find (32,213,749 cache misses, 2.43%)</title><rect x="86.0" y="365" width="28.6" height="15.0" fill="rgb(229,113,27)" rx="2" ry="2" />
+<text  x="88.98" y="375.5" >st..</text>
+</g>
+<g >
+<title>std::pair&lt;std::_Rb_tree_iterator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, bool&gt; std::map&lt;unsigned long, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::emplace&lt;std::pair&lt;unsigned long, gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&amp;&gt; &gt; (45,001,166 cache misses, 3.39%)</title><rect x="40.0" y="381" width="40.1" height="15.0" fill="rgb(206,4,1)" rx="2" ry="2" />
+<text  x="43.03" y="391.5" >std..</text>
+</g>
+<g >
+<title>std::unordered_set&lt;unsigned long, std::hash&lt;unsigned long&gt;, std::equal_to&lt;unsigned long&gt;, std::allocator&lt;unsigned long&gt; &gt;::find (165,613 cache misses, 0.01%)</title><rect x="1186.8" y="349" width="0.1" height="15.0" fill="rgb(225,94,22)" rx="2" ry="2" />
+<text  x="1189.80" y="359.5" ></text>
+</g>
+<g >
+<title>__GI___libc_free (1,068,160 cache misses, 0.08%)</title><rect x="375.9" y="253" width="0.9" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="378.86" y="263.5" ></text>
+</g>
+<g >
+<title>gz::physics::EntityPtr&lt;gz::physics::World&lt;gz::physics::FeaturePolicy&lt;double, 3ul&gt;, gz::sim::v11::systems::PhysicsPrivate::GravityFeatureList&gt; &gt; gz::sim::v11::systems::physics_system::EntityFeatureMap&lt;gz::physics::World, gz::physics::FeaturePolicy&lt;double, 3ul&gt;, gz::sim::v11::systems::PhysicsPrivate::MinimumFeatureList, gz::sim::v11::systems::PhysicsPrivate::CollisionFeatureList, gz::sim::v11::systems::PhysicsPrivate::ContactFeatureList, gz::sim::v11::systems::PhysicsPrivate::GravityFeatureList, gz::sim::v11::systems::PhysicsPrivate::RayIntersectionFeatureList, gz::sim::v11::systems::PhysicsPrivate::SetContactPropertiesCallbackFeatureList, gz::sim::v11::systems::PhysicsPrivate::NestedModelFeatureList, gz::sim::v11::systems::PhysicsPrivate::CollisionDetectorFeatureList, gz::sim::v11::systems::PhysicsPrivate::SolverFeatureList, gz::sim::v11::systems::PhysicsPrivate::WorldModelFeatureList, gz::sim::v11::systems::PhysicsPrivate::CollisionPairMaxContactsFeatureList&gt;::EntityCast&lt;gz::sim::v11::systems::PhysicsPrivate::GravityFeatureList&gt; (217,131 cache misses, 0.02%)</title><rect x="1186.0" y="301" width="0.1" height="15.0" fill="rgb(205,1,0)" rx="2" ry="2" />
+<text  x="1188.95" y="311.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::redux_novec_unroller&lt;Eigen::internal::scalar_sum_op&lt;double, double&gt;, Eigen::internal::redux_evaluator&lt;Eigen::Diagonal&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; const, 0&gt; &gt;, 1, 2&gt;::run (1,877,075 cache misses, 0.14%)</title><rect x="1142.5" y="205" width="1.7" height="15.0" fill="rgb(250,207,49)" rx="2" ry="2" />
+<text  x="1145.53" y="215.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_erase (141,460 cache misses, 0.01%)</title><rect x="316.2" y="157" width="0.1" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="319.21" y="167.5" ></text>
+</g>
+<g >
+<title>[unknown] (122,918 cache misses, 0.01%)</title><rect x="331.9" y="333" width="0.2" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="334.95" y="343.5" ></text>
+</g>
+<g >
+<title>std::__detail::_Map_base&lt;unsigned long, std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, std::allocator&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt; &gt;, std::__detail::_Select1st, std::equal_to&lt;unsigned long&gt;, std::hash&lt;unsigned long&gt;, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits&lt;false, false, true&gt;, true&gt;::operator[] (13,024,801 cache misses, 0.98%)</title><rect x="1150.9" y="333" width="11.6" height="15.0" fill="rgb(224,89,21)" rx="2" ry="2" />
+<text  x="1153.90" y="343.5" ></text>
+</g>
+<g >
+<title>std::allocator_traits&lt;std::allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt; &gt;::deallocate (153,686 cache misses, 0.01%)</title><rect x="316.0" y="141" width="0.1" height="15.0" fill="rgb(215,50,12)" rx="2" ry="2" />
+<text  x="318.99" y="151.5" ></text>
+</g>
+<g >
+<title>_int_free (537,670 cache misses, 0.04%)</title><rect x="315.2" y="125" width="0.5" height="15.0" fill="rgb(247,196,46)" rx="2" ry="2" />
+<text  x="318.22" y="135.5" ></text>
+</g>
+<g >
+<title>std::_Hashtable&lt;unsigned long, std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, std::allocator&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt; &gt;, std::__detail::_Select1st, std::equal_to&lt;unsigned long&gt;, std::hash&lt;unsigned long&gt;, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits&lt;false, false, true&gt; &gt;::_M_rehash (1,119,500 cache misses, 0.08%)</title><rect x="1151.8" y="301" width="1.0" height="15.0" fill="rgb(251,212,50)" rx="2" ry="2" />
+<text  x="1154.83" y="311.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::systems::PhysicsPrivate::UpdateCollisions (191,784 cache misses, 0.01%)</title><rect x="1186.8" y="381" width="0.1" height="15.0" fill="rgb(218,61,14)" rx="2" ry="2" />
+<text  x="1189.78" y="391.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::redux_novec_unroller&lt;Eigen::internal::scalar_sum_op&lt;double, double&gt;, Eigen::internal::redux_evaluator&lt;Eigen::Diagonal&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 3, false&gt; const, 0&gt; &gt;, 0, 3&gt;::run (1,569,356 cache misses, 0.12%)</title><rect x="1089.4" y="141" width="1.4" height="15.0" fill="rgb(250,207,49)" rx="2" ry="2" />
+<text  x="1092.40" y="151.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::binary_evaluator&lt;Eigen::CwiseBinaryOp&lt;Eigen::internal::scalar_cmp_op&lt;double, double,  (176,244 cache misses, 0.01%)</title><rect x="375.7" y="317" width="0.2" height="15.0" fill="rgb(208,16,3)" rx="2" ry="2" />
+<text  x="378.70" y="327.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::systems::PhysicsPrivate::CreateWorldEntities (184,812 cache misses, 0.01%)</title><rect x="336.7" y="381" width="0.2" height="15.0" fill="rgb(214,42,10)" rx="2" ry="2" />
+<text  x="339.69" y="391.5" ></text>
+</g>
+<g >
+<title>__GI___libc_malloc (54,613,842 cache misses, 4.12%)</title><rect x="779.4" y="221" width="48.6" height="15.0" fill="rgb(219,68,16)" rx="2" ry="2" />
+<text  x="782.39" y="231.5" >__GI..</text>
+</g>
+<g >
+<title>std::allocator_traits&lt;std::allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt; &gt;::deallocate (202,538 cache misses, 0.02%)</title><rect x="300.9" y="285" width="0.1" height="15.0" fill="rgb(215,50,12)" rx="2" ry="2" />
+<text  x="303.86" y="295.5" ></text>
+</g>
+<g >
+<title>__GI___libc_malloc (203,633 cache misses, 0.02%)</title><rect x="336.0" y="269" width="0.2" height="15.0" fill="rgb(219,68,16)" rx="2" ry="2" />
+<text  x="338.99" y="279.5" ></text>
+</g>
+<g >
+<title>std::__new_allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::deallocate (153,686 cache misses, 0.01%)</title><rect x="316.0" y="125" width="0.1" height="15.0" fill="rgb(230,115,27)" rx="2" ry="2" />
+<text  x="318.99" y="135.5" ></text>
+</g>
+<g >
+<title>__ldexp (622,678 cache misses, 0.05%)</title><rect x="837.1" y="253" width="0.6" height="15.0" fill="rgb(241,167,40)" rx="2" ry="2" />
+<text  x="840.14" y="263.5" ></text>
+</g>
+<g >
+<title>std::unordered_map&lt;unsigned long, unsigned long, std::hash&lt;unsigned long&gt;, std::equal_to&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, unsigned long&gt; &gt; &gt;::find (208,172,399 cache misses, 15.69%)</title><rect x="114.7" y="381" width="185.1" height="15.0" fill="rgb(252,216,51)" rx="2" ry="2" />
+<text  x="117.65" y="391.5" >std::unordered_map&lt;unsig..</text>
+</g>
+<g >
+<title>gz::math::v10::graph::Graph&lt;unsigned long, bool, gz::math::v10::graph::DirectedEdge&lt;bool&gt; &gt;::Vertices (74,590,123 cache misses, 5.62%)</title><rect x="13.7" y="397" width="66.4" height="15.0" fill="rgb(252,217,52)" rx="2" ry="2" />
+<text  x="16.70" y="407.5" >gz::mat..</text>
+</g>
+<g >
+<title>operator delete (156,504 cache misses, 0.01%)</title><rect x="895.5" y="253" width="0.1" height="15.0" fill="rgb(247,196,46)" rx="2" ry="2" />
+<text  x="898.47" y="263.5" ></text>
+</g>
+<g >
+<title>non-virtual thunk to dart::dynamics::ShapeNode::asShapeNode (175,362 cache misses, 0.01%)</title><rect x="776.2" y="205" width="0.1" height="15.0" fill="rgb(247,195,46)" rx="2" ry="2" />
+<text  x="779.16" y="215.5" ></text>
+</g>
+<g >
+<title>[unknown] (197,529 cache misses, 0.01%)</title><rect x="332.1" y="205" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="335.07" y="215.5" ></text>
+</g>
+<g >
+<title>gz::physics::dartsim::SimulationFeatures::Write (76,713,170 cache misses, 5.78%)</title><rect x="1038.8" y="285" width="68.2" height="15.0" fill="rgb(247,196,47)" rx="2" ry="2" />
+<text  x="1041.77" y="295.5" >gz::phy..</text>
+</g>
+<g >
+<title>gz::sim::v11::detail::BaseView::ResetNewEntityState (449,578 cache misses, 0.03%)</title><rect x="10.2" y="413" width="0.4" height="15.0" fill="rgb(208,15,3)" rx="2" ry="2" />
+<text  x="13.22" y="423.5" ></text>
+</g>
+<g >
+<title>gz::physics::Gravity::Implementation&lt;gz::physics::FeaturePolicy&lt;double, 3ul&gt; &gt;* gz::physics::Entity&lt;gz::physics::FeaturePolicy&lt;double, 3ul&gt;, gz::sim::v11::systems::PhysicsPrivate::GravityFeatureList&gt;::Interface&lt;gz::physics::Gravity&gt; (180,530 cache misses, 0.01%)</title><rect x="1186.2" y="285" width="0.2" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="1189.20" y="295.5" ></text>
+</g>
+<g >
+<title>std::__new_allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::allocate (25,877,342 cache misses, 1.95%)</title><rect x="41.7" y="285" width="23.0" height="15.0" fill="rgb(228,107,25)" rx="2" ry="2" />
+<text  x="44.67" y="295.5" >s..</text>
+</g>
+<g >
+<title>dxHashSpace::cleanGeoms (45,186,067 cache misses, 3.41%)</title><rect x="855.2" y="253" width="40.2" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="858.16" y="263.5" >dxH..</text>
+</g>
+<g >
+<title>Eigen::Matrix&lt;double, 3, 1, 0, 3, 1&gt;&amp; Eigen::PlainObjectBase&lt;Eigen::Matrix&lt;double, 3, 1, 0, 3, 1&gt; &gt;::_set_noalias&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 1, true&gt; &gt; (3,831,406 cache misses, 0.29%)</title><rect x="1082.4" y="221" width="3.4" height="15.0" fill="rgb(222,82,19)" rx="2" ry="2" />
+<text  x="1085.38" y="231.5" ></text>
+</g>
+<g >
+<title>std::_Hashtable&lt;unsigned long, std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt;, std::allocator&lt;std::pair&lt;unsigned long const, gz::math::v10::Pose3&lt;double&gt; &gt; &gt;, std::__detail::_Select1st, std::equal_to&lt;unsigned long&gt;, std::hash&lt;unsigned long&gt;, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits&lt;false, false, true&gt; &gt;::_M_find_before_node (221,332 cache misses, 0.02%)</title><rect x="1151.2" y="301" width="0.2" height="15.0" fill="rgb(205,3,0)" rx="2" ry="2" />
+<text  x="1154.25" y="311.5" ></text>
+</g>
+<g >
+<title>dart::simulation::World::setGravity (25,926,198 cache misses, 1.95%)</title><rect x="1162.9" y="301" width="23.1" height="15.0" fill="rgb(249,204,48)" rx="2" ry="2" />
+<text  x="1165.89" y="311.5" >d..</text>
+</g>
+<g >
+<title>void std::__new_allocator&lt;gz::physics::WorldPose&gt;::construct&lt;gz::physics::WorldPose, gz::physics::WorldPose const&amp;&gt; (2,327,874 cache misses, 0.18%)</title><rect x="1095.9" y="237" width="2.1" height="15.0" fill="rgb(253,221,52)" rx="2" ry="2" />
+<text  x="1098.88" y="247.5" ></text>
+</g>
+<g >
+<title>operator new (10,194,924 cache misses, 0.77%)</title><rect x="1098.0" y="189" width="9.0" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="1100.95" y="199.5" ></text>
+</g>
+<g >
+<title>Eigen::internal::generic_dense_assignment_kernel&lt;Eigen::internal::evaluator&lt;Eigen::Matrix&lt;double, 3, 1, 0, 3, 1&gt; &gt;, Eigen::internal::evaluator&lt;Eigen::Block&lt;Eigen::Matrix&lt;double, 4, 4, 0, 4, 4&gt; const, 3, 1, true&gt; &gt;, Eigen::internal::assign_op&lt;double, double&gt;, 0&gt;::assignCoeffByOuterInner (3,831,406 cache misses, 0.29%)</title><rect x="1082.4" y="125" width="3.4" height="15.0" fill="rgb(247,194,46)" rx="2" ry="2" />
+<text  x="1085.38" y="135.5" ></text>
+</g>
+<g >
+<title>dGeomMoved (183,623 cache misses, 0.01%)</title><rect x="598.4" y="221" width="0.2" height="15.0" fill="rgb(210,23,5)" rx="2" ry="2" />
+<text  x="601.40" y="231.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_put_node (2,123,899 cache misses, 0.16%)</title><rect x="306.3" y="237" width="1.9" height="15.0" fill="rgb(252,220,52)" rx="2" ry="2" />
+<text  x="309.31" y="247.5" ></text>
+</g>
+<g >
+<title>std::enable_if&lt;__and_v&lt;std::__not_&lt;std::is_same&lt;std::optional&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt; &gt;, std::remove_cv&lt;std::remove_reference&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt; const&amp;&gt;::type&gt;::type&gt; &gt;, std::__not_&lt;std::__and_&lt;std::is_scalar&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt; &gt;, std::is_same&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt;, std::decay&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt; const&amp;&gt;::type&gt; &gt; &gt;, std::is_constructible&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt;, Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt; const&amp;&gt;, std::is_assignable&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt;&amp;, Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt; const&amp;&gt; &gt;, std::optional&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt; &gt;&amp;&gt;::type std::optional&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt; &gt;::operator=&lt;Eigen::Matrix&lt;double, -1, 1, 0, -1, 1&gt; const&amp;&gt; (6,585,951 cache misses, 0.50%)</title><rect x="1032.7" y="349" width="5.9" height="15.0" fill="rgb(214,43,10)" rx="2" ry="2" />
+<text  x="1035.71" y="359.5" ></text>
+</g>
+<g >
+<title>__memset_avx2_unaligned_erms (2,317,631 cache misses, 0.17%)</title><rect x="10.6" y="381" width="2.1" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="13.62" y="391.5" ></text>
+</g>
+<g >
+<title>void Eigen::internal::conditional_aligned_delete_auto&lt;double, true&gt; (1,117,220 cache misses, 0.08%)</title><rect x="375.9" y="301" width="1.0" height="15.0" fill="rgb(226,100,24)" rx="2" ry="2" />
+<text  x="378.86" y="311.5" ></text>
+</g>
+<g >
+<title>std::_Rb_tree&lt;unsigned long, std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt;, std::_Select1st&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt;, std::less&lt;unsigned long&gt;, std::allocator&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt;::_M_erase (9,422,091 cache misses, 0.71%)</title><rect x="308.2" y="253" width="8.4" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="311.20" y="263.5" ></text>
+</g>
+<g >
+<title>_int_malloc (11,869,825 cache misses, 0.89%)</title><rect x="901.0" y="221" width="10.6" height="15.0" fill="rgb(215,47,11)" rx="2" ry="2" />
+<text  x="904.04" y="231.5" ></text>
+</g>
+<g >
+<title>[libdart.so.6.13.2] (24,932,467 cache misses, 1.88%)</title><rect x="388.0" y="333" width="22.1" height="15.0" fill="rgb(241,166,39)" rx="2" ry="2" />
+<text  x="390.95" y="343.5" >[..</text>
+</g>
+<g >
+<title>std::allocator_traits&lt;std::allocator&lt;std::_Rb_tree_node&lt;std::pair&lt;unsigned long const, std::reference_wrapper&lt;gz::math::v10::graph::Vertex&lt;unsigned long&gt; const&gt; &gt; &gt; &gt; &gt;::deallocate (2,123,899 cache misses, 0.16%)</title><rect x="306.3" y="221" width="1.9" height="15.0" fill="rgb(215,50,12)" rx="2" ry="2" />
+<text  x="309.31" y="231.5" ></text>
+</g>
+<g >
+<title>void std::allocator_traits&lt;std::allocator&lt;gz::physics::WorldPose&gt; &gt;::construct&lt;gz::physics::WorldPose, gz::physics::WorldPose const&amp;&gt; (2,327,874 cache misses, 0.18%)</title><rect x="1095.9" y="253" width="2.1" height="15.0" fill="rgb(239,156,37)" rx="2" ry="2" />
+<text  x="1098.88" y="263.5" ></text>
+</g>
+<g >
+<title>gz::transport::v16::Discovery&lt;gz::transport::v16::ServicePublisher&gt;::RecvMessages (113,646 cache misses, 0.01%)</title><rect x="1189.2" y="493" width="0.1" height="15.0" fill="rgb(233,133,31)" rx="2" ry="2" />
+<text  x="1192.18" y="503.5" ></text>
+</g>
+<g >
+<title>gz::sim::v11::systems::SceneBroadcaster::PostUpdate (116,780 cache misses, 0.01%)</title><rect x="1189.0" y="477" width="0.1" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="1192.01" y="487.5" ></text>
+</g>
+<g >
+<title>[unknown] (177,486 cache misses, 0.01%)</title><rect x="299.7" y="285" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="302.69" y="295.5" ></text>
+</g>
+<g >
+<title>std::__new_allocator&lt;std::_Rb_tree_node&lt;unsigned long&gt; &gt;::allocate (3,773,172 cache misses, 0.28%)</title><rect x="320.5" y="269" width="3.4" height="15.0" fill="rgb(238,154,36)" rx="2" ry="2" />
+<text  x="323.54" y="279.5" ></text>
+</g>
+<g >
+<title>dxBox::computeAABB (2,373,578 cache misses, 0.18%)</title><rect x="859.9" y="237" width="2.1" height="15.0" fill="rgb(240,161,38)" rx="2" ry="2" />
+<text  x="862.87" y="247.5" ></text>
+</g>
+<g >
+<title>[unknown] (185,055 cache misses, 0.01%)</title><rect x="299.7" y="317" width="0.1" height="15.0" fill="rgb(210,24,5)" rx="2" ry="2" />
+<text  x="302.68" y="327.5" ></text>
+</g>
+</g>
+</svg>
