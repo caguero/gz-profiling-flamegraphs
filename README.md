@@ -13,6 +13,8 @@ scripts/                    # Capture and analysis tools
   capture_all.sh            # Captures all worlds in a directory
   gz_hotspots.sh            # Gazebo hotspot analysis from .folded
   gz_cache_stats.sh         # CPU cache miss rate / IPC measurement
+  gz_cache_flamegraph.sh    # Cache-miss flamegraph capture
+  gz_compare_cpu_cache.sh   # CPU vs cache-miss side-by-side comparison
 worlds/                     # Benchmark world SDFs (all RTF=0)
   3k_shapes.sdf             # 3000 dynamic entities
   3k_shapes_static.sdf      # 3000 static entities
@@ -145,6 +147,28 @@ Measure cache miss rates and Instructions Per Cycle (IPC) to determine if a work
 ```
 
 IPC interpretation: 2-4 = healthy (compute-bound), 1-2 = moderate, <1 = memory-bound (CPU stalled on RAM).
+
+### Cache-Miss Flamegraphs
+
+Generate flamegraphs showing WHERE cache misses happen (not CPU time):
+
+```bash
+# Runtime: capture cache misses from a running world
+./scripts/gz_cache_flamegraph.sh --runtime worlds/3k_shapes_static.sdf 3k_static 30
+
+# Loading: capture cache misses during startup
+./scripts/gz_cache_flamegraph.sh --loading worlds/jetty.sdf jetty
+```
+
+### CPU vs Cache-Miss Comparison
+
+Compare CPU flamegraphs with cache-miss flamegraphs to identify cache-hostile functions:
+
+```bash
+./scripts/gz_compare_cpu_cache.sh captures/runtime/3k_shapes_static.folded captures/cache/3k_static_rt_cachemiss.folded
+```
+
+Output shows cache ratio per function: >1.3 = cache-hostile (needs data layout fix), <0.7 = cache-friendly (needs algorithmic fix).
 
 ### Environment Variables
 

@@ -491,6 +491,8 @@ profiling/
     capture_all.sh                 # Captures all worlds in a directory
     gz_hotspots.sh                 # Gazebo hotspot analysis from .folded
     gz_cache_stats.sh              # CPU cache miss/IPC measurement
+    gz_cache_flamegraph.sh         # Cache-miss flamegraph capture
+    gz_compare_cpu_cache.sh        # CPU vs cache-miss comparison
 \end{verbatim}
 
 \textbf{File types:}
@@ -526,6 +528,8 @@ gz-profiling/
     capture_all.sh            #   Captures all worlds in a directory
     gz_hotspots.sh            #   Gazebo hotspot analysis from .folded
     gz_cache_stats.sh         #   CPU cache miss/IPC measurement
+    gz_cache_flamegraph.sh    #   Cache-miss flamegraph capture
+    gz_compare_cpu_cache.sh   #   CPU vs cache-miss comparison
   worlds/                     # Benchmark world SDFs (all RTF=0)
     3k_shapes.sdf             #   3000 dynamic entities
     3k_shapes_static.sdf      #   3000 static entities
@@ -541,6 +545,7 @@ gz-profiling/
     findings_report.pdf       #   This report
     findings_report.tex       #   LaTeX source
     figures/                  #   Thumbnails for the report
+    cache/                    #   Cache-miss flamegraphs + .folded
     index.html                #   Per-run index with links
   YYYY-MM-DD/                 # Future runs
 \end{verbatim}
@@ -1380,6 +1385,65 @@ sensors & 2.3s & 1.6M & 1.26 & Healthy \\
 }
 
 The loading phase shows the same pattern --- entity/model construction for large worlds (3k\_shapes, jetty) involves building graph structures and hash maps that thrash the cache during startup.
+
+\subsection{Per-function cache analysis}
+
+Cache-miss flamegraphs (captured with \texttt{perf record -e cache-misses}) were compared with CPU flamegraphs to identify which Gazebo functions are \emph{cache-hostile} (more cache misses than their CPU share) vs \emph{cache-friendly} (algorithmic cost without memory-layout issues). The ``cache ratio'' is cache-miss\% divided by CPU-time\%: values above 1.3 indicate cache-hostile code; below 0.7 indicates cache-friendly code.
+
+\subsubsection*{Cache-hostile Gazebo functions (ratio $>$ 1.3)}
+
+These functions cause disproportionately many cache misses. Fixing them requires better \textbf{data layout} (contiguous storage, fewer pointer chases) in addition to algorithmic improvements.
+
+{\footnotesize
+\begin{longtable}[]{@{}
+  p{0.30\textwidth}
+  p{0.18\textwidth}
+  >{\raggedleft\arraybackslash}p{0.08\textwidth}
+  >{\raggedleft\arraybackslash}p{0.08\textwidth}
+  >{\raggedleft\arraybackslash}p{0.08\textwidth}@{}}
+\toprule
+Function & World & CPU \% & Cache \% & Ratio \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\texttt{RenderUtil::UpdateFromECM} & gpu\_lidar & 5.2 & 10.6 & 2.0 \\
+\texttt{Sensors::PostUpdate} & gpu\_lidar & 5.6 & 14.7 & 2.6 \\
+\texttt{ProcessRecreateEntitiesRemove} & jetty & 15.2 & 27.2 & 1.7 \\
+\texttt{PhysicsPrivate::Step} & sensors\_demo & 21.7 & 39.6 & 1.8 \\
+\texttt{UpdatePhysics} & 3k\_static & 0.8 & 2.0 & 2.5 \\
+\texttt{UpdatePhysics} & sensors & 3.9 & 5.5 & 1.4 \\
+\end{longtable}
+}
+
+\subsubsection*{Cache-friendly Gazebo functions (ratio $<$ 0.7)}
+
+These functions are algorithmically expensive but their data fits in cache. The fix is to \textbf{reduce work} (skip calls, use cached results), not change data layout.
+
+{\footnotesize
+\begin{longtable}[]{@{}
+  p{0.30\textwidth}
+  p{0.18\textwidth}
+  >{\raggedleft\arraybackslash}p{0.08\textwidth}
+  >{\raggedleft\arraybackslash}p{0.08\textwidth}
+  >{\raggedleft\arraybackslash}p{0.08\textwidth}@{}}
+\toprule
+Function & World & CPU \% & Cache \% & Ratio \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\texttt{ProcessRecreateEntitiesRemove} & 3k\_static & 45.0 & 26.9 & 0.5 \\
+\texttt{ProcessRecreateEntitiesRemove} & 3k\_dynamic & 10.7 & 7.2 & 0.6 \\
+\texttt{Barrier::Wait} & sensors & 38.1 & 23.0 & 0.6 \\
+\texttt{RenderUtil::Update} & jetty & 23.4 & 0.5 & 0.0 \\
+\texttt{Rendering pipeline} & jetty & 13--24 & \textasciitilde0 & 0.0 \\
+\end{longtable}
+}
+
+\textbf{Key insight}: \texttt{ProcessRecreateEntitiesRemove} is cache-friendly in 3k\_shapes (ratio 0.5) but \textbf{cache-hostile in jetty} (ratio 1.7). The same function exercises different memory access patterns depending on the world's entity structure. The algorithmic fix (use cached \texttt{Each()}) benefits both worlds, but jetty would additionally benefit from improved data layout.
+
+All cache-miss flamegraphs and \texttt{.folded} files are available in the repository under \texttt{2026-04-21/cache/} and can be analyzed with \texttt{gz\_compare\_cpu\_cache.sh}.
 
 \begin{center}\rule{0.5\linewidth}{0.5pt}\end{center}
 
