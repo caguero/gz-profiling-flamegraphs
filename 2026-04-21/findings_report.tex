@@ -385,28 +385,35 @@ framework overhead from physics engine cost:
   \texttt{\textasciitilde{}/rotary\_ws/tools/FlameGraph/}
 \end{itemize}
 
-\subsection{Build Command}
+\subsection{Setup}
 
 \begin{verbatim}
-cd ~/your_ws
+# 1. Clone the profiling repository
+git clone https://github.com/caguero/gz-profiling
+cd gz-profiling
+
+# 2. Clone FlameGraph scripts
+git clone https://github.com/brendangregg/FlameGraph
+export FLAMEGRAPH_DIR=$(pwd)/FlameGraph
+
+# 3. Build your Gazebo workspace with debug symbols
+cd <GZ_WS>
 colcon build --merge-install \
   --cmake-args -DENABLE_PROFILER=OFF \
                -DCMAKE_BUILD_TYPE=RelWithDebInfo \
                -DCMAKE_CXX_FLAGS="-fno-omit-frame-pointer" \
                -DCMAKE_C_FLAGS="-fno-omit-frame-pointer"
-\end{verbatim}
 
-\subsection{Environment Setup}
-
-\begin{verbatim}
-source ~/your_ws/install/setup.bash
-export GZ_CONFIG_PATH=~/your_ws/install/share/gz:$GZ_CONFIG_PATH
-export GZ_SIM_MAIN=~/your_ws/install/libexec/gz/sim/gz-sim-main
-export FLAMEGRAPH_DIR=~/FlameGraph
+# 4. Source workspace and set environment
+source <GZ_WS>/install/setup.bash
+export GZ_CONFIG_PATH=<GZ_WS>/install/share/gz:$GZ_CONFIG_PATH
+export GZ_SIM_MAIN=<GZ_WS>/install/libexec/gz/sim/gz-sim-main
 sudo sysctl kernel.perf_event_paranoid=1
 \end{verbatim}
 
-\subsection{Modified World SDFs}
+Replace \texttt{<GZ\_WS>} with the path to your Gazebo workspace (e.g., \texttt{\textasciitilde{}/rotary\_ws}).
+
+\subsection{Benchmark Worlds}
 
 All benchmark worlds are in the repository's \texttt{worlds/} directory with
 \texttt{real\_time\_factor} set to \texttt{0} to saturate CPU.
@@ -416,13 +423,9 @@ Sensor worlds have companion \texttt{.topics} files listing topics for subscribe
 
 \subsection{Running Captures}
 
-All captures are automated via the repository's scripts:
+From the \texttt{gz-profiling} repository directory:
 
 \begin{verbatim}
-# Clone the repository
-git clone https://github.com/caguero/gz-profiling
-cd gz-profiling
-
 # Capture all worlds (runtime + loading flamegraphs)
 ./scripts/capture_all.sh worlds/
 
