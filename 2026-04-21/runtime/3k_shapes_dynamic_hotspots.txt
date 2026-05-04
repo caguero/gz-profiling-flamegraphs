@@ -1,0 +1,85 @@
+============================================
+  Gazebo Hotspot Analysis: 3k_shapes_dynamic
+============================================
+  Total samples: 156545244046
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1. Optimization targets (inclusive time)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Gazebo functions ranked by total CPU spent under them
+  (including all children). If you optimize or remove one
+  of these functions, you'd save up to this % of CPU.
+  These are the primary optimization candidates.
+
+  98.0%  gz::sim::v11::SimulationRunner::Run
+  98.0%  gz::sim::v11::ServerPrivate::Run
+  97.9%  gz::sim::v11::SimulationRunner::Step
+  87.1%  gz::sim::v11::SimulationRunner::UpdateSystems
+  87.1%  gz::sim::v11::systems::Physics::Update
+  83.3%  gz::sim::v11::systems::PhysicsPrivate::Step
+  10.8%  gz::sim::v11::SimulationRunner::ProcessRecreateEntitiesRemove
+   2.9%  gz::sim::v11::systems::PhysicsPrivate::UpdateSim
+   1.8%  gz::sim::v11::systems::PhysicsPrivate::UpdateModelPose
+   1.0%  gz::sim::v11::Model::Links
+   0.6%  gz::math::v10::graph::Graph<unsigned
+   0.6%  gz::sim::v11::EntityComponentManager::ParentEntity
+   0.5%  gz::sim::v11::systems::PhysicsPrivate::ChangedLinks
+   0.4%  gz::sim::v11::components::Component<unsigned
+   0.3%  gz::sim::v11::components::Component<std::add_lvalue_reference<void>,
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  2. What Gazebo functions call (attribution)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  For each sample, finds the nearest Gazebo function in the
+  stack and shows what external function it called. Format:
+  GazeboFunc -> ExternalFunc. Shows where optimizing the
+  Gazebo caller would reduce external library cost.
+
+  83.3%  gz::sim::v11::systems::PhysicsPrivate::Step -> gz::physics::ForwardStep::World<...>
+  10.8%  gz::sim::v11::SimulationRunner::ProcessRecreateEntitiesRemove -> void
+   1.0%  gz::sim::v11::Model::Links -> std::vector<unsigned
+   0.6%  gz::sim::v11::EntityComponentManager::ParentEntity -> gz::math::v10::graph::Graph<...>
+   0.4%  gz::sim::v11::systems::PhysicsPrivate::ChangedLinks -> gz::physics::FrameSemantics::Frame<...>
+   0.2%  gz::sim::v11::Model::Models -> std::vector<unsigned
+   0.2%  gz::sim::v11::systems::PhysicsPrivate::UpdatePhysics -> void
+   0.1%  gz::sim::v11::systems::PhysicsPrivate::UpdateModelPose -> std::unordered_map<...>
+   0.1%  gz::sim::v11::systems::Physics::Update -> gz::physics::SpecifyData<...>
+   0.0%  gz::sim::v11::EntityComponentManager::SetAllComponentsUnchanged -> std::unordered_map<...>
+   0.0%  gz::sim::v11::EntityComponentManager::SetChanged -> std::unordered_set<...>
+   0.0%  gz::sim::v11::systems::PhysicsPrivate::UpdateSim -> std::set<unsigned
+   0.0%  gz::sim::v11::EntityComponentManager::UpdatePeriodicChangeCache -> void
+   0.0%  gz::sim::v11::systems::Physics::Update -> std::map<unsigned
+   0.0%  gz::sim::v11::EntityComponentManager::ClearNewlyCreatedEntities -> std::unordered_set<...>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  3. External costs (context)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Top CPU consumers in external libraries (DART, ODE, Ogre,
+  glibc, etc.). Not directly actionable, but shows where
+  the CPU actually executes. See section 2 for which Gazebo
+  function is responsible for each.
+
+  83.3%  gz::physics::ForwardStep::World<gz::physics::FeaturePolicy<double,
+   0.4%  [libdart.so.6.13.2]
+   0.1%  dart::dynamics::Skeleton::isMobile
+   0.1%  dart::constraint::ConstraintBase::getDimension
+   0.1%  dart::constraint::ConstrainedGroup::getConstraint
+   0.1%  dart::dynamics::BodyNode::getSkeleton
+   0.1%  _int_free
+   0.1%  dart::dynamics::BodyNode::isReactive
+   0.0%  [unknown]
+   0.0%  dart::constraint::ContactConstraint::getVelocityChange
+   0.0%  dart::math::AdInvT
+   0.0%  __memset_avx2_unaligned_erms
+   0.0%  dart::dynamics::Joint::isDynamic
+   0.0%  dart::dynamics::Node::getBodyNodePtr
+   0.0%  dart::dynamics::Frame::World
+
+============================================
+  Summary
+============================================
+  How much CPU runs under a Gazebo function in the call stack?
+  This is the portion we can influence by changing Gazebo code.
+
+  Under Gazebo code:  98.1%  (optimization opportunity)
+  Outside Gazebo:      1.9%  (external threads, drivers, kernel)

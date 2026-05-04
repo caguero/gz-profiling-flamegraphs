@@ -1,0 +1,64 @@
+# Unified profiling summary: jetty_headless
+# Date: 2026-05-02 16:34
+# Dimensions available: cpu,cache
+# Scoring: cpu(0-40) + cache(0-20) + offcpu(0-15) + c2c(0-15) + sched(0-10) = 0-100
+rank	function_name	score	cpu_pct	cache_ratio	offcpu_us	hitm_pct	sched_flag	evidence_sources
+1	void gz::sim::v11::EntityComponentManager::EachNoCache<gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::ModelTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > >, gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::RecreateTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > > >	40	14.8	-	-	-	cpu
+2	gz::sim::v11::systems::SensorsPrivate::RunOnce	40	23.6	-	-	-	cpu
+3	gz::sim::v11::systems::SensorsPrivate::RenderThread	40	23.6	1.2	-	-	cpu,cache
+4	gz::sim::v11::systems::Physics::Update	40	54.7	-	-	-	cpu
+5	gz::sim::v11::systems::PhysicsPrivate::Step	40	53.0	-	-	-	cpu
+6	gz::sim::v11::SimulationRunner::UpdateSystems	40	56.5	-	-	-	cpu
+7	gz::sim::v11::SimulationRunner::Step	40	72.0	-	-	-	cpu
+8	gz::sim::v11::SimulationRunner::Run	40	72.0	0.4	-	-	cpu,cache
+9	gz::sim::v11::SimulationRunner::ProcessRecreateEntitiesRemove	40	15.2	-	-	-	cpu
+10	gz::sim::v11::ServerPrivate::Run	40	72.0	0.3	-	-	cpu,cache
+11	gz::sim::v11::SceneManager::LoadGeometry	40	23.4	-	-	-	cpu
+12	gz::sim::v11::SceneManager::CreateVisual	40	23.5	-	-	-	cpu
+13	gz::sim::v11::RenderUtil::Update	40	23.5	-	-	-	cpu
+14	gz::sim::v11::loadMesh	40	13.5	-	-	-	cpu
+15	gz::physics::dartsim::SimulationFeatures::WorldForwardStep	40	53.0	-	-	-	cpu
+16	gz::common::MeshManager::Load	40	13.5	-	-	-	cpu
+17	gz::common::AssimpLoader::Load	40	12.9	-	-	-	cpu
+18	gz::common::AssimpLoader::Implementation::CreateMaterial	40	10.9	-	-	-	cpu
+19	stbi__load_main	25	7.2	0.2	-	-	cpu,cache
+20	stbi__load_and_postprocess_8bit	25	7.4	0.2	-	-	cpu,cache
+21	gz::sim::v11::EntityComponentManager::ComponentImplementation	25	0.5	2.6	-	-	cpu,cache
+22	gz::rendering::v11::Ogre2Scene::CreateMeshImpl	25	9.8	-	-	-	cpu
+23	gz::rendering::v11::Ogre2MeshFactory::OgreItem	25	9.7	-	-	-	cpu
+24	gz::rendering::v11::Ogre2MeshFactory::LoadImpl	25	8.9	-	-	-	cpu
+25	gz::rendering::v11::Ogre2MeshFactory::Create	25	9.8	-	-	-	cpu
+26	gz::rendering::v11::Ogre2Material::SetTextureMapDataImpl	25	8.7	-	-	-	cpu
+27	gz::rendering::v11::BaseScene::CreateMesh	25	9.9	-	-	-	cpu
+28	gz::rendering::v11::BaseMaterial<gz::rendering::v11::Ogre2Object>::CopyFrom	25	8.7	-	-	-	cpu
+29	gz::physics::dartsim::BitmaskContactFilter::ignoresCollision	25	6.6	-	-	-	cpu
+30	gz::common::Image::SetFromCompressedData	25	7.5	-	-	-	cpu
+31	gz::common::Image::RGBAData	25	7.7	-	-	-	cpu
+32	gz::common::Image::Implementation::DataWithChannels	25	6.9	-	-	-	cpu
+33	gz::common::AssimpLoader::Implementation::LoadTexture	25	7.5	-	-	-	cpu
+34	gz::common::AssimpLoader::Implementation::LoadEmbeddedTexture	25	7.5	-	-	-	cpu
+35	std::pair<std::_Rb_tree_iterator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, bool> std::_Rb_tree<unsigned long, std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> >, std::_Select1st<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::_M_emplace_unique<std::pair<unsigned long, gz::math::v10::graph::Vertex<unsigned long> const&> >	10	2.9	0.1	-	-	cpu,cache
+36	stbi__YCbCr_to_RGB_simd	10	3.9	-	-	-	cpu
+37	stbi__jpeg_decode_block	10	2.1	-	-	-	cpu
+38	stbi__decode_jpeg_image	10	3.2	-	-	-	cpu
+39	stbi__convert_format	10	3.2	-	-	-	cpu
+40	gz::physics::dartsim::GzContactSurfaceHandler::createConstraint	10	1.1	-	-	-	cpu
+41	gz::math::v10::graph::Graph<unsigned long, bool, gz::math::v10::graph::DirectedEdge<bool> >::Vertices	10	3.7	0.5	-	-	cpu,cache
+42	gz::common::Image::ChannelData	10	1.7	-	-	-	cpu
+43	gz::common::AssimpLoader::Implementation::SplitMetallicRoughnessMap	10	3.4	-	-	-	cpu
+44	std::_Rb_tree<unsigned long, std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> >, std::_Select1st<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::_M_erase	5	0.8	0.5	-	-	cpu,cache
+45	stbi__idct_simd	5	0.8	-	-	-	cpu
+46	stbi__grow_buffer_unsafe	5	0.6	-	-	-	cpu
+47	gz::sim::v11::systems::PhysicsPrivate::UpdateSim	5	0.7	-	-	-	cpu
+48	gz::sim::v11::systems::PhysicsPrivate::UpdatePhysics	5	0.7	-	-	-	cpu
+49	gz::sim::v11::systems::JointPositionController::PreUpdate	5	0.5	-	-	-	cpu
+50	gz::sim::v11::SimulationRunner::ProcessSystemQueue	5	0.9	1.1	-	-	cpu,cache
+51	gz::physics::dartsim::SimulationFeatures::Write	5	0.6	-	-	-	cpu
+52	gz::physics::dartsim::GzContactSurfaceHandler::createParams	5	0.7	-	-	-	cpu
+53	gz::common::Image::Width	5	0.9	-	-	-	cpu
+54	gz::common::Image::Valid	5	0.7	-	-	-	cpu
+55	gz::common::Image::Height	5	0.7	-	-	-	cpu
+56	gz::common::ColladaLoader::Load	5	0.7	-	-	-	cpu
+57	gz::common::ColladaLoader::Implementation::LoadScene	5	0.7	-	-	-	cpu
+58	gz::common::ColladaLoader::Implementation::LoadNode	5	0.7	-	-	-	cpu
+59	gz::common::ColladaLoader::Implementation::LoadGeometry	5	0.7	-	-	-	cpu

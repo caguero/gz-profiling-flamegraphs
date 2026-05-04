@@ -1,0 +1,85 @@
+============================================
+  Gazebo Hotspot Analysis: gpu_lidar
+============================================
+  Total samples: 54916651223
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1. Optimization targets (inclusive time)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Gazebo functions ranked by total CPU spent under them
+  (including all children). If you optimize or remove one
+  of these functions, you'd save up to this % of CPU.
+  These are the primary optimization candidates.
+
+  49.3%  gz::sim::v11::ServerPrivate::Run
+  49.3%  gz::sim::v11::SimulationRunner::Run
+  48.8%  gz::sim::v11::SimulationRunner::Step
+  44.2%  gz::sim::v11::SimulationRunner::UpdateSystems
+  41.2%  gz::sim::v11::systems::Physics::Update
+  36.5%  gz::sim::v11::systems::PhysicsPrivate::Step
+  35.7%  gz::physics::dartsim::SimulationFeatures::WorldForwardStep
+  11.9%  gz::sim::v11::SimulationRunner::ProcessSystemQueue
+   6.7%  gz::sim::v11::Barrier::Wait
+   5.6%  gz::sim::v11::systems::Sensors::PostUpdate
+   5.4%  gz::sim::v11::systems::SensorsPrivate::RenderThread
+   5.4%  gz::sim::v11::systems::SensorsPrivate::RunOnce
+   5.2%  gz::sim::v11::RenderUtil::UpdateFromECM
+   4.4%  gz::sensors::v11::Sensor::Update
+   4.4%  gz::sensors::v11::Manager::RunOnce
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  2. What Gazebo functions call (attribution)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  For each sample, finds the nearest Gazebo function in the
+  stack and shows what external function it called. Format:
+  GazeboFunc -> ExternalFunc. Shows where optimizing the
+  Gazebo caller would reduce external library cost.
+
+   6.4%  gz::physics::dartsim::SimulationFeatures::WorldForwardStep -> [libdart.so.6.13.2]
+   5.8%  gz::sim::v11::Barrier::Wait -> [unknown]
+   4.4%  gz::physics::dartsim::SimulationFeatures::WorldForwardStep -> dart::dynamics::BodyNode::getSkeleton
+   4.1%  gz::physics::dartsim::SimulationFeatures::WorldForwardStep -> dart::constraint::BoxedLcpConstraintSolver::solveConstrainedGroup
+   2.7%  gz::physics::dartsim::SimulationFeatures::WorldForwardStep -> dart::constraint::ConstrainedGroup::getConstraint
+   2.2%  gz::sim::v11::RenderUtilPrivate::CreateEntitiesRuntime -> void
+   1.6%  gz::physics::dartsim::SimulationFeatures::WorldForwardStep -> dart::dynamics::BodyNode::isReactive
+   1.5%  gz::sim::v11::SimulationRunner::ProcessRecreateEntitiesRemove -> void
+   1.5%  gz::physics::dartsim::SimulationFeatures::WorldForwardStep -> dart::constraint::ContactConstraint::getVelocityChange
+   1.4%  gz::sim::v11::RenderUtilPrivate::RemoveRenderingEntities -> void
+   1.0%  gz::sim::v11::systems::PhysicsPrivate::UpdateSim -> void
+   0.9%  gz::physics::dartsim::SimulationFeatures::WorldForwardStep -> operator
+   0.9%  gz::physics::dartsim::SimulationFeatures::WorldForwardStep -> _int_free
+   0.8%  gz::sim::v11::systems::PhysicsPrivate::UpdatePhysics -> void
+   0.7%  gz::physics::dartsim::SimulationFeatures::WorldForwardStep -> [unknown]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  3. External costs (context)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Top CPU consumers in external libraries (DART, ODE, Ogre,
+  glibc, etc.). Not directly actionable, but shows where
+  the CPU actually executes. See section 2 for which Gazebo
+  function is responsible for each.
+
+  21.4%  [unknown]
+   7.2%  [[vdso]]
+   6.9%  [libnvidia-eglcore.so.580.126.09]
+   6.4%  [libdart.so.6.13.2]
+   4.5%  dart::dynamics::BodyNode::getSkeleton
+   4.1%  dart::constraint::BoxedLcpConstraintSolver::solveConstrainedGroup
+   2.7%  dart::constraint::ConstrainedGroup::getConstraint
+   1.6%  dart::dynamics::BodyNode::isReactive
+   1.5%  dart::constraint::ContactConstraint::getVelocityChange
+   1.2%  Ogre::MovableObject::cullFrustum
+   1.0%  _int_free
+   1.0%  Ogre::SceneManager::cullFrustum
+   0.8%  Ogre::SceneManager::updateAllLodsThread
+   0.7%  pthread_barrier_wait@@GLIBC_2.34
+   0.7%  pthread_mutex_lock@@GLIBC_2.2.5
+
+============================================
+  Summary
+============================================
+  How much CPU runs under a Gazebo function in the call stack?
+  This is the portion we can influence by changing Gazebo code.
+
+  Under Gazebo code:  67.9%  (optimization opportunity)
+  Outside Gazebo:     32.1%  (external threads, drivers, kernel)

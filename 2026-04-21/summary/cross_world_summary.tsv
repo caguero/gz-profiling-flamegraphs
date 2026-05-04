@@ -1,0 +1,153 @@
+# Cross-world profiling summary
+# Worlds analyzed: 3k_shapes_dynamic, 3k_shapes_static, gpu_lidar, jetty_headless, sensors_demo, sensors_nonrendering
+# Date: 2026-05-02 16:34
+# Ranked by max_score desc, then worlds_present desc
+rank	function_name	max_score	worlds_present	worst_world	cpu_range	cache_range	evidence
+1	gz::sim::v11::systems::SensorsPrivate::RenderThread	45	3/6	gpu_lidar (5.4%)	5.4-23.6%	1.2-8.1	cpu,cache
+2	gz::sim::v11::SimulationRunner::Step	40	6/6	3k_shapes_dynamic (97.9%)	28.6-98.5%	-	cpu
+3	gz::sim::v11::systems::Physics::Update	40	6/6	3k_shapes_dynamic (87.1%)	24.0-87.1%	-	cpu
+4	gz::sim::v11::SimulationRunner::Run	40	6/6	3k_shapes_dynamic (98.0%)	28.9-98.6%	0.2-0.4	cpu,cache
+5	gz::physics::dartsim::SimulationFeatures::WorldForwardStep	40	6/6	3k_shapes_dynamic (82.7%)	21.5-82.7%	-	cpu
+6	gz::sim::v11::systems::PhysicsPrivate::Step	40	6/6	3k_shapes_dynamic (83.3%)	21.8-83.3%	-	cpu
+7	gz::sim::v11::SimulationRunner::UpdateSystems	40	6/6	3k_shapes_dynamic (87.1%)	25.2-87.1%	-	cpu
+8	gz::sim::v11::SimulationRunner::ProcessRecreateEntitiesRemove	40	6/6	3k_shapes_dynamic (10.8%)	1.7-45.0%	-	cpu
+9	void gz::sim::v11::EntityComponentManager::EachNoCache<gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::ModelTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > >, gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::RecreateTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > > >	40	6/6	3k_shapes_dynamic (10.8%)	1.5-45.2%	-	cpu
+10	gz::sim::v11::ServerPrivate::Run	40	6/6	3k_shapes_dynamic (98.0%)	28.9-98.6%	0.2-0.3	cpu,cache
+11	gz::math::v10::graph::Graph<unsigned long, bool, gz::math::v10::graph::DirectedEdge<bool> >::Vertices	40	5/6	3k_shapes_static (13.6%)	1.5-13.6%	0.2-1.1	cpu,cache
+12	gz::sim::v11::SimulationRunner::ProcessSystemQueue	40	4/6	gpu_lidar (11.9%)	0.9-42.7%	0.0-1.1	cpu,cache
+13	gz::sim::v11::systems::SensorsPrivate::RunOnce	40	3/6	jetty_headless (23.6%)	5.4-23.6%	-	cpu
+14	gz::sim::v11::Barrier::Wait	40	3/6	sensors_nonrendering (38.2%)	1.9-38.2%	-	cpu
+15	gz::sim::v11::EntityComponentManager::EntityMatches	40	2/6	3k_shapes_static (28.1%)	6.6-28.1%	0.4-2.0	cpu,cache
+16	gz::physics::ForwardStep::World<gz::physics::FeaturePolicy<double, 3ul>, gz::sim::v11::systems::PhysicsPrivate::MinimumFeatureList>::Step	40	2/6	3k_shapes_dynamic (83.3%)	52.0-83.3%	-	cpu
+17	gz::sim::v11::loadMesh	40	1/6	jetty_headless (13.5%)	13.5-13.5%	-	cpu
+18	gz::common::MeshManager::Load	40	1/6	jetty_headless (13.5%)	13.5-13.5%	-	cpu
+19	gz::common::AssimpLoader::Load	40	1/6	jetty_headless (12.9%)	12.9-12.9%	-	cpu
+20	gz::sim::v11::RenderUtil::Update	40	1/6	jetty_headless (23.5%)	23.5-23.5%	-	cpu
+21	gz::sim::v11::SceneManager::LoadGeometry	40	1/6	jetty_headless (23.4%)	23.4-23.4%	-	cpu
+22	gz::sim::v11::SceneManager::CreateVisual	40	1/6	jetty_headless (23.5%)	23.5-23.5%	-	cpu
+23	gz::common::AssimpLoader::Implementation::CreateMaterial	40	1/6	jetty_headless (10.9%)	10.9-10.9%	-	cpu
+24	std::pair<std::_Rb_tree_iterator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, bool> std::_Rb_tree<unsigned long, std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> >, std::_Select1st<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::_M_emplace_unique<std::pair<unsigned long, gz::math::v10::graph::Vertex<unsigned long> const&> >	25	5/6	3k_shapes_static (5.7%)	1.4-5.7%	0.1-0.8	cpu,cache
+25	gz::sim::v11::systems::PhysicsPrivate::UpdateSim	25	5/6	sensors_nonrendering (8.3%)	0.7-8.3%	-	cpu
+26	gz::physics::dartsim::SimulationFeatures::Write	25	4/6	3k_shapes_static (7.1%)	0.6-7.1%	-	cpu
+27	gz::physics::dartsim::BitmaskContactFilter::ignoresCollision	25	3/6	3k_shapes_static (5.4%)	1.8-6.6%	-	cpu
+28	gz::sim::v11::EntityComponentManager::ComponentImplementation	25	3/6	3k_shapes_dynamic (0.9%)	0.5-1.5%	2.6-3.1	cpu,cache
+29	std::pair<std::_Rb_tree_iterator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, bool> std::map<unsigned long, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const>, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::emplace<std::pair<unsigned long, gz::math::v10::graph::Vertex<unsigned long> const&> >	25	2/6	3k_shapes_static (5.6%)	2.1-5.6%	0.3-0.8	cpu,cache
+30	std::_Rb_tree_const_iterator<std::pair<unsigned long const, gz::math::v10::graph::Vertex<unsigned long> > >::operator++	25	2/6	3k_shapes_static (7.5%)	1.3-7.5%	0.2-1.8	cpu,cache
+31	gz::sim::v11::RenderUtil::UpdateFromECM	25	2/6	gpu_lidar (5.2%)	1.6-5.2%	-	cpu
+32	gz::sensors::v11::Manager::RunOnce	25	2/6	sensors_demo (7.3%)	4.4-7.3%	-	cpu
+33	gz::sensors::v11::Sensor::Update	25	2/6	sensors_demo (7.3%)	4.4-7.3%	-	cpu
+34	gz::sensors::v11::RenderingSensor::Render	25	2/6	sensors_demo (6.3%)	3.4-6.3%	-	cpu
+35	gz::sim::v11::systems::Sensors::PostUpdate	25	2/6	gpu_lidar (5.6%)	1.9-5.6%	-	cpu
+36	gz::common::Image::SetFromCompressedData	25	1/6	jetty_headless (7.5%)	7.5-7.5%	-	cpu
+37	gz::rendering::v11::Ogre2MeshFactory::Create	25	1/6	jetty_headless (9.8%)	9.8-9.8%	-	cpu
+38	stbi__load_and_postprocess_8bit	25	1/6	jetty_headless (7.4%)	7.4-7.4%	0.2-0.2	cpu,cache
+39	gz::common::Image::Implementation::DataWithChannels	25	1/6	jetty_headless (6.9%)	6.9-6.9%	-	cpu
+40	gz::rendering::v11::BaseScene::CreateMesh	25	1/6	jetty_headless (9.9%)	9.9-9.9%	-	cpu
+41	gz::rendering::v11::Ogre2Material::SetTextureMapDataImpl	25	1/6	jetty_headless (8.7%)	8.7-8.7%	-	cpu
+42	gz::rendering::v11::Ogre2MeshFactory::OgreItem	25	1/6	jetty_headless (9.7%)	9.7-9.7%	-	cpu
+43	gz::common::AssimpLoader::Implementation::LoadTexture	25	1/6	jetty_headless (7.5%)	7.5-7.5%	-	cpu
+44	gz::common::Image::RGBAData	25	1/6	jetty_headless (7.7%)	7.7-7.7%	-	cpu
+45	stbi__load_main	25	1/6	jetty_headless (7.2%)	7.2-7.2%	0.2-0.2	cpu,cache
+46	gz::common::AssimpLoader::Implementation::LoadEmbeddedTexture	25	1/6	jetty_headless (7.5%)	7.5-7.5%	-	cpu
+47	gz::rendering::v11::BaseMaterial<gz::rendering::v11::Ogre2Object>::CopyFrom	25	1/6	jetty_headless (8.7%)	8.7-8.7%	-	cpu
+48	gz::rendering::v11::Ogre2MeshFactory::LoadImpl	25	1/6	jetty_headless (8.9%)	8.9-8.9%	-	cpu
+49	gz::rendering::v11::Ogre2Scene::CreateMeshImpl	25	1/6	jetty_headless (9.8%)	9.8-9.8%	-	cpu
+50	gz::sim::v11::systems::PhysicsPrivate::UpdatePhysics	10	5/6	gpu_lidar (1.0%)	0.5-3.9%	-	cpu
+51	gz::transport::v16::Node::Publisher::Publish	10	3/6	sensors_nonrendering (1.1%)	0.5-1.1%	-	cpu
+52	void gz::physics::CanWriteRequiredData<gz::physics::dartsim::SimulationFeatures, gz::physics::RequireData<gz::physics::WorldPoses> >::WriteRequiredData<gz::physics::SpecifyData<gz::physics::RequireData<gz::physics::WorldPoses>, gz::physics::ExpectData<gz::physics::ChangedWorldPoses, gz::physics::Contacts, gz::physics::JointPositions> > >	10	3/6	3k_shapes_dynamic (2.3%)	0.5-3.4%	-	cpu
+53	gz::transport::v16::pollSockets	10	3/6	sensors_demo (1.1%)	0.7-1.3%	0.1-0.1	cpu,cache
+54	gz::transport::v16::Discovery<gz::transport::v16::ServicePublisher>::RecvMessages	10	3/6	sensors_nonrendering (1.2%)	0.6-1.2%	0.2-0.3	cpu,cache
+55	gz::transport::v16::Discovery<gz::transport::v16::MessagePublisher>::RecvMessages	10	3/6	sensors_nonrendering (1.0%)	0.6-1.0%	-	cpu
+56	std::_Rb_tree<unsigned long, std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> >, std::_Select1st<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::_M_erase	10	3/6	3k_shapes_static (1.9%)	0.6-1.9%	0.1-0.8	cpu,cache
+57	gz::sim::v11::EntityComponentManager::FindView	10	3/6	gpu_lidar (2.4%)	1.0-3.6%	-	cpu
+58	gz::sim::v11::systems::PhysicsPrivate::CreatePhysicsEntities	10	2/6	sensors_nonrendering (1.0%)	0.5-1.0%	-	cpu
+59	std::_Rb_tree_node<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >* std::_Rb_tree<unsigned long, std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> >, std::_Select1st<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::_M_create_node<std::pair<unsigned long, gz::math::v10::graph::Vertex<unsigned long> const&> >	10	2/6	3k_shapes_dynamic (1.8%)	1.8-3.5%	0.1-0.4	cpu,cache
+60	gz::sim::v11::EntityComponentManager::ClearNewlyCreatedEntities	10	2/6	gpu_lidar (1.0%)	0.6-1.0%	-	cpu
+61	std::map<unsigned long, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const>, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::~map	10	2/6	3k_shapes_static (1.8%)	0.6-1.8%	0.1-0.8	cpu,cache
+62	gz::sensors::v11::GpuLidarSensor::Update	10	2/6	gpu_lidar (4.4%)	1.3-4.4%	-	cpu
+63	void gz::physics::OperateOnSpecifiedData<gz::physics::RequireData<gz::physics::WorldPoses>, gz::physics::FindRequired, gz::physics::detail::WriteDataOperation, gz::physics::dartsim::SimulationFeatures const>::SubOperate<gz::physics::WorldPoses, gz::physics::RequireData<gz::physics::WorldPoses>, gz::physics::SpecifyData<gz::physics::RequireData<gz::physics::WorldPoses>, gz::physics::ExpectData<gz::physics::ChangedWorldPoses, gz::physics::Contacts, gz::physics::JointPositions> > >	10	2/6	3k_shapes_dynamic (2.3%)	2.3-3.4%	-	cpu
+64	gz::sim::v11::RenderUtilPrivate::CreateEntitiesRuntime	10	2/6	gpu_lidar (2.4%)	0.6-2.4%	-	cpu
+65	std::_Rb_tree<unsigned long, std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> >, std::_Select1st<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::~_Rb_tree	10	2/6	3k_shapes_static (1.8%)	0.6-1.8%	0.1-0.8	cpu,cache
+66	void gz::physics::OperateOnSpecifiedData<gz::physics::RequireData<gz::physics::WorldPoses>, gz::physics::FindRequired, gz::physics::detail::WriteDataOperation, gz::physics::dartsim::SimulationFeatures const>::Operate<gz::physics::SpecifyData<gz::physics::RequireData<gz::physics::WorldPoses>, gz::physics::ExpectData<gz::physics::ChangedWorldPoses, gz::physics::Contacts, gz::physics::JointPositions> > >	10	2/6	3k_shapes_dynamic (2.3%)	2.3-3.4%	-	cpu
+67	gz::sim::v11::SimulationRunner::PublishStats	10	2/6	sensors_nonrendering (1.6%)	0.8-1.6%	-	cpu
+68	gz::sim::v11::RenderUtilPrivate::CreateRenderingEntities	10	2/6	gpu_lidar (2.6%)	0.7-2.6%	-	cpu
+69	gz::rendering::v11::Ogre2GpuRays::UpdateRenderTarget1stPass	10	2/6	gpu_lidar (2.9%)	1.1-2.9%	-	cpu
+70	std::allocator_traits<std::allocator<std::_Rb_tree_node<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > > >::allocate	10	2/6	3k_shapes_dynamic (1.8%)	1.8-3.5%	0.1-0.4	cpu,cache
+71	std::__new_allocator<std::_Rb_tree_node<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::allocate	10	2/6	3k_shapes_dynamic (1.8%)	1.8-3.5%	0.1-0.4	cpu,cache
+72	gz::rendering::v11::Ogre2Scene::PreRender	10	2/6	sensors_demo (1.0%)	0.7-1.0%	-	cpu
+73	gz::physics::detail::WriteDataOperation<gz::physics::WorldPoses, gz::physics::dartsim::SimulationFeatures const, gz::physics::SpecifyData<gz::physics::RequireData<gz::physics::WorldPoses>, gz::physics::ExpectData<gz::physics::ChangedWorldPoses, gz::physics::Contacts, gz::physics::JointPositions> > >::Operate	10	2/6	3k_shapes_dynamic (2.3%)	2.3-3.4%	-	cpu
+74	std::_Rb_tree<unsigned long, std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> >, std::_Select1st<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::_Auto_node::_Auto_node<std::pair<unsigned long, gz::math::v10::graph::Vertex<unsigned long> const&> >	10	2/6	3k_shapes_dynamic (1.8%)	1.8-3.5%	0.1-0.4	cpu,cache
+75	std::_Rb_tree<unsigned long, std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> >, std::_Select1st<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::_M_get_node	10	2/6	3k_shapes_dynamic (1.8%)	1.8-3.5%	0.1-0.4	cpu,cache
+76	gz::rendering::v11::Ogre2GpuRays::Render	10	2/6	gpu_lidar (3.0%)	1.2-3.0%	-	cpu
+77	gz::sim::v11::systems::SceneBroadcaster::PostUpdate	10	2/6	gpu_lidar (1.6%)	1.6-2.3%	0.0-0.2	cpu,cache
+78	gz::sim::v11::RenderUtilPrivate::RemoveRenderingEntities	10	1/6	gpu_lidar (1.4%)	1.4-1.4%	-	cpu
+79	stbi__decode_jpeg_image	10	1/6	jetty_headless (3.2%)	3.2-3.2%	-	cpu
+80	gz::physics::dartsim::KinematicsFeatures::FrameDataRelativeToWorld	10	1/6	sensors_nonrendering (1.8%)	1.8-1.8%	-	cpu
+81	gz::sim::v11::systems::PhysicsPrivate::LinkFrameDataAtOffset	10	1/6	sensors_nonrendering (3.1%)	3.1-3.1%	-	cpu
+82	std::__new_allocator<std::_Rb_tree_node<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::deallocate	10	1/6	3k_shapes_static (1.1%)	1.1-1.1%	0.2-0.2	cpu,cache
+83	std::_Rb_tree<unsigned long, std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> >, std::_Select1st<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::_M_drop_node	10	1/6	3k_shapes_static (1.1%)	1.1-1.1%	0.2-0.2	cpu,cache
+84	gz::sim::v11::systems::AirPressure::PostUpdate	10	1/6	sensors_nonrendering (1.3%)	1.3-1.3%	-	cpu
+85	gz::common::AssimpLoader::Implementation::SplitMetallicRoughnessMap	10	1/6	jetty_headless (3.4%)	3.4-3.4%	-	cpu
+86	stbi__convert_format	10	1/6	jetty_headless (3.2%)	3.2-3.2%	-	cpu
+87	gz::sim::v11::systems::Altimeter::PostUpdate	10	1/6	sensors_nonrendering (1.1%)	1.1-1.1%	-	cpu
+88	stbi__jpeg_decode_block	10	1/6	jetty_headless (2.1%)	2.1-2.1%	-	cpu
+89	gz::rendering::v11::Ogre2RenderTarget::Render	10	1/6	sensors_demo (4.0%)	4.0-4.0%	-	cpu
+90	std::_Rb_tree<unsigned long, std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> >, std::_Select1st<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::_M_get_insert_unique_pos	10	1/6	3k_shapes_static (1.4%)	1.4-1.4%	0.6-0.6	cpu,cache
+91	gz::sensors::v11::DepthCameraSensor::Update	10	1/6	sensors_demo (1.2%)	1.2-1.2%	-	cpu
+92	gz::physics::dartsim::GzContactSurfaceHandler::createConstraint	10	1/6	jetty_headless (1.1%)	1.1-1.1%	-	cpu
+93	stbi__YCbCr_to_RGB_simd	10	1/6	jetty_headless (3.9%)	3.9-3.9%	-	cpu
+94	std::allocator_traits<std::allocator<std::_Rb_tree_node<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > > >::deallocate	10	1/6	3k_shapes_static (1.1%)	1.1-1.1%	0.2-0.2	cpu,cache
+95	gz::sensors::v11::CameraSensor::Update	10	1/6	sensors_demo (4.8%)	4.8-4.8%	-	cpu
+96	gz::sim::v11::systems::MagnetometerPrivate::CreateSensors	10	1/6	sensors_nonrendering (1.6%)	1.6-1.6%	-	cpu
+97	gz::common::Image::ChannelData	10	1/6	jetty_headless (1.7%)	1.7-1.7%	-	cpu
+98	gz::transport::v16::Node::Publisher::HasConnections	10	1/6	sensors_nonrendering (2.0%)	2.0-2.0%	-	cpu
+99	void gz::sim::v11::EntityComponentManager::Each<gz::sim::v11::components::Component<gz::math::v10::Pose3<double>, gz::sim::v11::components::PoseTag, gz::sim::v11::serializers::DefaultSerializer<gz::math::v10::Pose3<double> > >, gz::sim::v11::components::Component<gz::math::v10::Pose3<double>, gz::sim::v11::components::WorldPoseTag, gz::sim::v11::serializers::DefaultSerializer<gz::math::v10::Pose3<double> > >, gz::sim::v11::components::Component<unsigned long, gz::sim::v11::components::ParentEntityTag, gz::sim::v11::serializers::DefaultSerializer<unsigned long> > >	10	1/6	sensors_nonrendering (2.6%)	2.6-2.6%	-	cpu
+100	gz::sim::v11::systems::Imu::PostUpdate	10	1/6	sensors_nonrendering (1.4%)	1.4-1.4%	-	cpu
+101	gz::sim::v11::Model::Links	10	1/6	3k_shapes_dynamic (1.0%)	1.0-1.0%	-	cpu
+102	std::vector<unsigned long, std::allocator<unsigned long> > gz::sim::v11::EntityComponentManager::ChildrenByComponents<gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::LinkTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > > >	10	1/6	3k_shapes_dynamic (1.0%)	1.0-1.0%	-	cpu
+103	gz::sim::v11::systems::Magnetometer::PostUpdate	10	1/6	sensors_nonrendering (2.3%)	2.3-2.3%	-	cpu
+104	gz::rendering::v11::Ogre2Camera::Render	10	1/6	sensors_demo (4.0%)	4.0-4.0%	-	cpu
+105	std::_Hashtable<std::vector<unsigned long, std::allocator<unsigned long> >, std::pair<std::vector<unsigned long, std::allocator<unsigned long> > const, std::pair<std::unique_ptr<gz::sim::v11::detail::BaseView, std::default_delete<gz::sim::v11::detail::BaseView> >, std::unique_ptr<std::mutex, std::default_delete<std::mutex> > > >, std::allocator<std::pair<std::vector<unsigned long, std::allocator<unsigned long> > const, std::pair<std::unique_ptr<gz::sim::v11::detail::BaseView, std::default_delete<gz::sim::v11::detail::BaseView> >, std::unique_ptr<std::mutex, std::default_delete<std::mutex> > > > >, std::__detail::_Select1st, std::equal_to<std::vector<unsigned long, std::allocator<unsigned long> > >, gz::sim::v11::detail::ComponentTypeHasher, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<true, false, true> >::_M_find_before_node	10	1/6	sensors_nonrendering (1.2%)	1.2-1.2%	-	cpu
+106	void gz::sim::v11::EntityComponentManager::Each<gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::JointTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > >, gz::sim::v11::components::Component<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, gz::sim::v11::components::NameTag, gz::sim::v11::serializers::StringSerializer> >	10	1/6	sensors_nonrendering (2.4%)	2.4-2.4%	-	cpu
+107	gz::sim::v11::systems::PhysicsPrivate::UpdateModelPose	10	1/6	3k_shapes_dynamic (1.8%)	1.8-1.8%	-	cpu
+108	std::_Rb_tree<unsigned long, std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> >, std::_Select1st<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::_M_put_node	10	1/6	3k_shapes_static (1.1%)	1.1-1.1%	0.2-0.2	cpu,cache
+109	gz::sim::v11::detail::BaseView::ResetNewEntityState	5	2/6	gpu_lidar (0.9%)	0.6-0.9%	-	cpu
+110	gz::sim::v11::systems::SceneBroadcasterPrivate::SceneGraphRemoveEntities	5	2/6	gpu_lidar (0.6%)	0.6-0.7%	-	cpu
+111	std::_Rb_tree<unsigned long, std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> >, std::_Select1st<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::_Auto_node::_M_insert	5	1/6	3k_shapes_static (0.7%)	0.7-0.7%	0.9-0.9	cpu,cache
+112	std::_Rb_tree<unsigned long, std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> >, std::_Select1st<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::_S_right	5	1/6	3k_shapes_static (0.7%)	0.7-0.7%	0.7-0.7	cpu,cache
+113	gz::physics::dartsim::GzContactSurfaceHandler::createParams	5	1/6	jetty_headless (0.7%)	0.7-0.7%	-	cpu
+114	std::unordered_map<unsigned long, gz::math::v10::Pose3<double>, std::hash<unsigned long>, std::equal_to<unsigned long>, std::allocator<std::pair<unsigned long const, gz::math::v10::Pose3<double> > > >::operator[]	5	1/6	3k_shapes_static (0.9%)	0.9-0.9%	-	cpu
+115	bool gz::sim::v11::detail::applyFunction<gz::sim::v11::components::Component<gz::math::v10::Vector3<double>, gz::sim::v11::components::GravityTag, gz::sim::v11::serializers::DefaultSerializer<gz::math::v10::Vector3<double> > >, std::function<bool 	5	1/6	3k_shapes_static (0.8%)	0.8-0.8%	-	cpu
+116	gz::sensors::v11::Lidar::PublishLidarScan	5	1/6	gpu_lidar (0.8%)	0.8-0.8%	-	cpu
+117	gz::common::Image::Valid	5	1/6	jetty_headless (0.7%)	0.7-0.7%	-	cpu
+118	gz::common::Image::Width	5	1/6	jetty_headless (0.9%)	0.9-0.9%	-	cpu
+119	gz::sim::v11::systems::ImuPrivate::CreateSensors	5	1/6	sensors_nonrendering (0.6%)	0.6-0.6%	-	cpu
+120	gz::common::ColladaLoader::Implementation::LoadGeometry	5	1/6	jetty_headless (0.7%)	0.7-0.7%	-	cpu
+121	std::_Rb_tree<unsigned long, std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> >, std::_Select1st<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::_M_insert_node	5	1/6	3k_shapes_static (0.7%)	0.7-0.7%	0.9-0.9	cpu,cache
+122	gz::math::v10::graph::Graph<unsigned long, bool, gz::math::v10::graph::DirectedEdge<bool> >::AdjacentsFrom	5	1/6	3k_shapes_dynamic (0.7%)	0.7-0.7%	-	cpu
+123	std::__new_allocator<std::__detail::_Hash_node<std::pair<unsigned long const, gz::math::v10::Pose3<double> >, false> >::allocate	5	1/6	3k_shapes_static (0.6%)	0.6-0.6%	-	cpu
+124	gz::sim::v11::systems::AirPressurePrivate::CreateSensors	5	1/6	sensors_nonrendering (0.6%)	0.6-0.6%	-	cpu
+125	gz::sim::v11::systems::ForceTorque::Update	5	1/6	sensors_nonrendering (0.6%)	0.6-0.6%	-	cpu
+126	gz::sim::v11::detail::View* gz::sim::v11::EntityComponentManager::FindView<gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::WorldTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > > >	5	1/6	sensors_nonrendering (0.6%)	0.6-0.6%	-	cpu
+127	std::__detail::_Hash_node<std::pair<unsigned long const, gz::math::v10::Pose3<double> >, false>* std::__detail::_Hashtable_alloc<std::allocator<std::__detail::_Hash_node<std::pair<unsigned long const, gz::math::v10::Pose3<double> >, false> > >::_M_allocate_node<std::piecewise_construct_t const&, std::tuple<unsigned long const&>, std::tuple<> >	5	1/6	3k_shapes_static (0.6%)	0.6-0.6%	-	cpu
+128	void gz::sim::v11::EntityComponentManager::Each<gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::JointTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > >, gz::sim::v11::components::Component<gz::msgs::Wrench, gz::sim::v11::components::JointTransmittedWrenchTag, gz::sim::v11::serializers::MsgSerializer> >	5	1/6	sensors_nonrendering (0.8%)	0.8-0.8%	-	cpu
+129	gz::sim::v11::EntityComponentManager::ParentEntity	5	1/6	3k_shapes_dynamic (0.6%)	0.6-0.6%	-	cpu
+130	gz::sim::v11::RenderUtilPrivate::UpdateRenderingEntities	5	1/6	gpu_lidar (0.8%)	0.8-0.8%	-	cpu
+131	gz::sim::v11::systems::PhysicsPrivate::ChangedLinks	5	1/6	3k_shapes_dynamic (0.5%)	0.5-0.5%	-	cpu
+132	std::__detail::_Map_base<unsigned long, std::pair<unsigned long const, gz::math::v10::Pose3<double> >, std::allocator<std::pair<unsigned long const, gz::math::v10::Pose3<double> > >, std::__detail::_Select1st, std::equal_to<unsigned long>, std::hash<unsigned long>, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true>, true>::operator[]	5	1/6	3k_shapes_static (0.9%)	0.9-0.9%	-	cpu
+133	std::_Hashtable<unsigned long, std::pair<unsigned long const, gz::math::v10::Pose3<double> >, std::allocator<std::pair<unsigned long const, gz::math::v10::Pose3<double> > >, std::__detail::_Select1st, std::equal_to<unsigned long>, std::hash<unsigned long>, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<false, false, true> >::_Scoped_node::_Scoped_node<std::piecewise_construct_t const&, std::tuple<unsigned long const&>, std::tuple<> >	5	1/6	3k_shapes_static (0.6%)	0.6-0.6%	-	cpu
+134	void gz::sim::v11::EntityComponentManager::Each<gz::sim::v11::components::Component<gz::math::v10::Pose3<double>, gz::sim::v11::components::PoseTag, gz::sim::v11::serializers::DefaultSerializer<gz::math::v10::Pose3<double> > >, gz::sim::v11::components::Component<gz::math::v10::Vector3<double>, gz::sim::v11::components::WorldLinearVelocityTag, gz::sim::v11::serializers::DefaultSerializer<gz::math::v10::Vector3<double> > >, gz::sim::v11::components::Component<unsigned long, gz::sim::v11::components::ParentEntityTag, gz::sim::v11::serializers::DefaultSerializer<unsigned long> > >	5	1/6	sensors_nonrendering (0.7%)	0.7-0.7%	-	cpu
+135	gz::sim::v11::systems::AltimeterPrivate::CreateSensors	5	1/6	sensors_nonrendering (0.6%)	0.6-0.6%	-	cpu
+136	void gz::sim::v11::EntityComponentManager::Each<gz::sim::v11::components::Component<gz::math::v10::Vector3<double>, gz::sim::v11::components::GravityTag, gz::sim::v11::serializers::DefaultSerializer<gz::math::v10::Vector3<double> > > >	5	1/6	3k_shapes_static (0.8%)	0.8-0.8%	-	cpu
+137	bool gz::sim::v11::detail::applyFunctionImpl<gz::sim::v11::components::Component<gz::math::v10::Vector3<double>, gz::sim::v11::components::GravityTag, gz::sim::v11::serializers::DefaultSerializer<gz::math::v10::Vector3<double> > >, std::function<bool 	5	1/6	3k_shapes_static (0.8%)	0.8-0.8%	-	cpu
+138	std::allocator_traits<std::allocator<std::__detail::_Hash_node<std::pair<unsigned long const, gz::math::v10::Pose3<double> >, false> > >::allocate	5	1/6	3k_shapes_static (0.6%)	0.6-0.6%	-	cpu
+139	gz::common::ColladaLoader::Implementation::LoadScene	5	1/6	jetty_headless (0.7%)	0.7-0.7%	-	cpu
+140	gz::math::v10::graph::Graph<unsigned long, bool, gz::math::v10::graph::DirectedEdge<bool> >::AdjacentsTo	5	1/6	3k_shapes_dynamic (0.6%)	0.6-0.6%	-	cpu
+141	gz::common::Image::Height	5	1/6	jetty_headless (0.7%)	0.7-0.7%	-	cpu
+142	gz::math::eigen3::convert	5	1/6	3k_shapes_static (0.6%)	0.6-0.6%	-	cpu
+143	stbi__idct_simd	5	1/6	jetty_headless (0.8%)	0.8-0.8%	-	cpu
+144	gz::common::ColladaLoader::Load	5	1/6	jetty_headless (0.7%)	0.7-0.7%	-	cpu
+145	stbi__grow_buffer_unsafe	5	1/6	jetty_headless (0.6%)	0.6-0.6%	-	cpu
+146	gz::transport::v16::Node::Publisher::Valid	5	1/6	sensors_nonrendering (0.5%)	0.5-0.5%	-	cpu
+147	gz::sim::v11::systems::JointPositionController::PreUpdate	5	1/6	jetty_headless (0.5%)	0.5-0.5%	-	cpu
+148	gz::common::ColladaLoader::Implementation::LoadNode	5	1/6	jetty_headless (0.7%)	0.7-0.7%	-	cpu

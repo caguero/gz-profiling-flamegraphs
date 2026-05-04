@@ -1,0 +1,29 @@
+============================================
+  Unified Profiling Summary: 3k_shapes_static
+============================================
+  Dimensions: cpu,cache
+  CPU total:  156578009190 samples
+  Cache total: 6148052 samples
+
+  Rank Function                                           Score   CPU%  Cache  HITM% Sched Sources
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1	void gz::sim::v11::EntityComponentManager::EachNoCache<gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::ModelTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > >, gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::RecreateTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > > >	40	45.2	-	-	-	cpu
+2	gz::sim::v11::systems::Physics::Update	40	53.2	-	-	-	cpu
+3	gz::sim::v11::systems::PhysicsPrivate::Step	40	52.0	-	-	-	cpu
+4	gz::sim::v11::SimulationRunner::UpdateSystems	40	53.3	-	-	-	cpu
+5	gz::sim::v11::SimulationRunner::Step	40	98.5	-	-	-	cpu
+6	gz::sim::v11::SimulationRunner::Run	40	98.6	0.2	-	-	cpu,cache
+7	gz::sim::v11::SimulationRunner::ProcessRecreateEntitiesRemove	40	45.0	-	-	-	cpu
+8	gz::sim::v11::ServerPrivate::Run	40	98.6	0.2	-	-	cpu,cache
+9	gz::sim::v11::EntityComponentManager::EntityMatches	40	28.1	0.4	-	-	cpu,cache
+10	gz::physics::ForwardStep::World<gz::physics::FeaturePolicy<double, 3ul>, gz::sim::v11::systems::PhysicsPrivate::MinimumFeatureList>::Step	40	52.0	-	-	-	cpu
+11	gz::physics::dartsim::SimulationFeatures::WorldForwardStep	40	48.4	-	-	-	cpu
+12	gz::math::v10::graph::Graph<unsigned long, bool, gz::math::v10::graph::DirectedEdge<bool> >::Vertices	40	13.6	0.2	-	-	cpu,cache
+13	std::_Rb_tree_const_iterator<std::pair<unsigned long const, gz::math::v10::graph::Vertex<unsigned long> > >::operator++	25	7.5	0.2	-	-	cpu,cache
+14	std::pair<std::_Rb_tree_iterator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, bool> std::_Rb_tree<unsigned long, std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> >, std::_Select1st<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::_M_emplace_unique<std::pair<unsigned long, gz::math::v10::graph::Vertex<unsigned long> const&> >	25	5.7	0.3	-	-	cpu,cache
+15	std::pair<std::_Rb_tree_iterator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, bool> std::map<unsigned long, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const>, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::emplace<std::pair<unsigned long, gz::math::v10::graph::Vertex<unsigned long> const&> >	25	5.6	0.3	-	-	cpu,cache
+16	gz::physics::dartsim::SimulationFeatures::Write	25	7.1	-	-	-	cpu
+17	gz::physics::dartsim::BitmaskContactFilter::ignoresCollision	25	5.4	-	-	-	cpu
+18	void gz::physics::OperateOnSpecifiedData<gz::physics::RequireData<gz::physics::WorldPoses>, gz::physics::FindRequired, gz::physics::detail::WriteDataOperation, gz::physics::dartsim::SimulationFeatures const>::SubOperate<gz::physics::WorldPoses, gz::physics::RequireData<gz::physics::WorldPoses>, gz::physics::SpecifyData<gz::physics::RequireData<gz::physics::WorldPoses>, gz::physics::ExpectData<gz::physics::ChangedWorldPoses, gz::physics::Contacts, gz::physics::JointPositions> > >	10	3.4	-	-	-	cpu
+19	void gz::physics::OperateOnSpecifiedData<gz::physics::RequireData<gz::physics::WorldPoses>, gz::physics::FindRequired, gz::physics::detail::WriteDataOperation, gz::physics::dartsim::SimulationFeatures const>::Operate<gz::physics::SpecifyData<gz::physics::RequireData<gz::physics::WorldPoses>, gz::physics::ExpectData<gz::physics::ChangedWorldPoses, gz::physics::Contacts, gz::physics::JointPositions> > >	10	3.4	-	-	-	cpu
+20	void gz::physics::CanWriteRequiredData<gz::physics::dartsim::SimulationFeatures, gz::physics::RequireData<gz::physics::WorldPoses> >::WriteRequiredData<gz::physics::SpecifyData<gz::physics::RequireData<gz::physics::WorldPoses>, gz::physics::ExpectData<gz::physics::ChangedWorldPoses, gz::physics::Contacts, gz::physics::JointPositions> > >	10	3.4	-	-	-	cpu

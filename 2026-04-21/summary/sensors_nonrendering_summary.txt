@@ -1,0 +1,29 @@
+============================================
+  Unified Profiling Summary: sensors_nonrendering
+============================================
+  Dimensions: cpu,cache
+  CPU total:  63298347961 samples
+  Cache total: 8799203 samples
+
+  Rank Function                                           Score   CPU%  Cache  HITM% Sched Sources
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1	gz::sim::v11::systems::Physics::Update	40	38.2	-	-	-	cpu
+2	gz::sim::v11::systems::PhysicsPrivate::Step	40	22.9	-	-	-	cpu
+3	gz::sim::v11::SimulationRunner::UpdateSystems	40	45.2	-	-	-	cpu
+4	gz::sim::v11::SimulationRunner::Step	40	53.7	-	-	-	cpu
+5	gz::sim::v11::SimulationRunner::Run	40	54.6	-	-	-	cpu
+6	gz::sim::v11::SimulationRunner::ProcessSystemQueue	40	42.7	0.0	-	-	cpu,cache
+7	gz::sim::v11::ServerPrivate::Run	40	54.6	-	-	-	cpu
+8	gz::sim::v11::Barrier::Wait	40	38.2	-	-	-	cpu
+9	gz::physics::dartsim::SimulationFeatures::WorldForwardStep	40	21.9	-	-	-	cpu
+10	gz::sim::v11::systems::PhysicsPrivate::UpdateSim	25	8.3	-	-	-	cpu
+11	void gz::sim::v11::EntityComponentManager::EachNoCache<gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::ModelTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > >, gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::RecreateTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > > >	10	4.4	-	-	-	cpu
+12	void gz::sim::v11::EntityComponentManager::Each<gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::JointTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > >, gz::sim::v11::components::Component<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, gz::sim::v11::components::NameTag, gz::sim::v11::serializers::StringSerializer> >	10	2.4	-	-	-	cpu
+13	void gz::sim::v11::EntityComponentManager::Each<gz::sim::v11::components::Component<gz::math::v10::Pose3<double>, gz::sim::v11::components::PoseTag, gz::sim::v11::serializers::DefaultSerializer<gz::math::v10::Pose3<double> > >, gz::sim::v11::components::Component<gz::math::v10::Pose3<double>, gz::sim::v11::components::WorldPoseTag, gz::sim::v11::serializers::DefaultSerializer<gz::math::v10::Pose3<double> > >, gz::sim::v11::components::Component<unsigned long, gz::sim::v11::components::ParentEntityTag, gz::sim::v11::serializers::DefaultSerializer<unsigned long> > >	10	2.6	-	-	-	cpu
+14	std::pair<std::_Rb_tree_iterator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, bool> std::_Rb_tree<unsigned long, std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> >, std::_Select1st<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::_M_emplace_unique<std::pair<unsigned long, gz::math::v10::graph::Vertex<unsigned long> const&> >	10	1.9	-	-	-	cpu
+15	std::_Hashtable<std::vector<unsigned long, std::allocator<unsigned long> >, std::pair<std::vector<unsigned long, std::allocator<unsigned long> > const, std::pair<std::unique_ptr<gz::sim::v11::detail::BaseView, std::default_delete<gz::sim::v11::detail::BaseView> >, std::unique_ptr<std::mutex, std::default_delete<std::mutex> > > >, std::allocator<std::pair<std::vector<unsigned long, std::allocator<unsigned long> > const, std::pair<std::unique_ptr<gz::sim::v11::detail::BaseView, std::default_delete<gz::sim::v11::detail::BaseView> >, std::unique_ptr<std::mutex, std::default_delete<std::mutex> > > > >, std::__detail::_Select1st, std::equal_to<std::vector<unsigned long, std::allocator<unsigned long> > >, gz::sim::v11::detail::ComponentTypeHasher, std::__detail::_Mod_range_hashing, std::__detail::_Default_ranged_hash, std::__detail::_Prime_rehash_policy, std::__detail::_Hashtable_traits<true, false, true> >::_M_find_before_node	10	1.2	-	-	-	cpu
+16	gz::transport::v16::pollSockets	10	1.3	-	-	-	cpu
+17	gz::transport::v16::Node::Publisher::Publish	10	1.1	-	-	-	cpu
+18	gz::transport::v16::Node::Publisher::HasConnections	10	2.0	-	-	-	cpu
+19	gz::transport::v16::Discovery<gz::transport::v16::ServicePublisher>::RecvMessages	10	1.2	0.2	-	-	cpu,cache
+20	gz::transport::v16::Discovery<gz::transport::v16::MessagePublisher>::RecvMessages	10	1.0	-	-	-	cpu

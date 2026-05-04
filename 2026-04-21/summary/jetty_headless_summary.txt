@@ -1,0 +1,29 @@
+============================================
+  Unified Profiling Summary: jetty_headless
+============================================
+  Dimensions: cpu,cache
+  CPU total:  135647938820 samples
+  Cache total: 14634854 samples
+
+  Rank Function                                           Score   CPU%  Cache  HITM% Sched Sources
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1	void gz::sim::v11::EntityComponentManager::EachNoCache<gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::ModelTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > >, gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::RecreateTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > > >	40	14.8	-	-	-	cpu
+2	gz::sim::v11::systems::SensorsPrivate::RunOnce	40	23.6	-	-	-	cpu
+3	gz::sim::v11::systems::SensorsPrivate::RenderThread	40	23.6	1.2	-	-	cpu,cache
+4	gz::sim::v11::systems::Physics::Update	40	54.7	-	-	-	cpu
+5	gz::sim::v11::systems::PhysicsPrivate::Step	40	53.0	-	-	-	cpu
+6	gz::sim::v11::SimulationRunner::UpdateSystems	40	56.5	-	-	-	cpu
+7	gz::sim::v11::SimulationRunner::Step	40	72.0	-	-	-	cpu
+8	gz::sim::v11::SimulationRunner::Run	40	72.0	0.4	-	-	cpu,cache
+9	gz::sim::v11::SimulationRunner::ProcessRecreateEntitiesRemove	40	15.2	-	-	-	cpu
+10	gz::sim::v11::ServerPrivate::Run	40	72.0	0.3	-	-	cpu,cache
+11	gz::sim::v11::SceneManager::LoadGeometry	40	23.4	-	-	-	cpu
+12	gz::sim::v11::SceneManager::CreateVisual	40	23.5	-	-	-	cpu
+13	gz::sim::v11::RenderUtil::Update	40	23.5	-	-	-	cpu
+14	gz::sim::v11::loadMesh	40	13.5	-	-	-	cpu
+15	gz::physics::dartsim::SimulationFeatures::WorldForwardStep	40	53.0	-	-	-	cpu
+16	gz::common::MeshManager::Load	40	13.5	-	-	-	cpu
+17	gz::common::AssimpLoader::Load	40	12.9	-	-	-	cpu
+18	gz::common::AssimpLoader::Implementation::CreateMaterial	40	10.9	-	-	-	cpu
+19	stbi__load_main	25	7.2	0.2	-	-	cpu,cache
+20	stbi__load_and_postprocess_8bit	25	7.4	0.2	-	-	cpu,cache

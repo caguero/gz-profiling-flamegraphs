@@ -1,0 +1,45 @@
+# Unified profiling summary: gpu_lidar
+# Date: 2026-05-02 16:34
+# Dimensions available: cpu,cache
+# Scoring: cpu(0-40) + cache(0-20) + offcpu(0-15) + c2c(0-15) + sched(0-10) = 0-100
+rank	function_name	score	cpu_pct	cache_ratio	offcpu_us	hitm_pct	sched_flag	evidence_sources
+1	gz::sim::v11::systems::SensorsPrivate::RenderThread	45	5.4	8.1	-	-	cpu,cache
+2	gz::sim::v11::systems::Physics::Update	40	41.2	-	-	-	cpu
+3	gz::sim::v11::systems::PhysicsPrivate::Step	40	36.5	-	-	-	cpu
+4	gz::sim::v11::SimulationRunner::UpdateSystems	40	44.2	-	-	-	cpu
+5	gz::sim::v11::SimulationRunner::Step	40	48.8	-	-	-	cpu
+6	gz::sim::v11::SimulationRunner::Run	40	49.3	-	-	-	cpu
+7	gz::sim::v11::SimulationRunner::ProcessSystemQueue	40	11.9	0.0	-	-	cpu,cache
+8	gz::sim::v11::ServerPrivate::Run	40	49.3	-	-	-	cpu
+9	gz::physics::dartsim::SimulationFeatures::WorldForwardStep	40	35.7	-	-	-	cpu
+10	gz::sim::v11::systems::SensorsPrivate::RunOnce	25	5.4	-	-	-	cpu
+11	gz::sim::v11::systems::Sensors::PostUpdate	25	5.6	-	-	-	cpu
+12	gz::sim::v11::RenderUtil::UpdateFromECM	25	5.2	-	-	-	cpu
+13	gz::sim::v11::Barrier::Wait	25	6.7	-	-	-	cpu
+14	void gz::sim::v11::EntityComponentManager::EachNoCache<gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::ModelTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > >, gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::RecreateTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > > >	10	1.5	-	-	-	cpu
+15	gz::sim::v11::systems::SceneBroadcaster::PostUpdate	10	1.6	0.2	-	-	cpu,cache
+16	gz::sim::v11::systems::PhysicsPrivate::UpdateSim	10	2.2	-	-	-	cpu
+17	gz::sim::v11::systems::PhysicsPrivate::UpdatePhysics	10	1.0	-	-	-	cpu
+18	gz::sim::v11::SimulationRunner::ProcessRecreateEntitiesRemove	10	1.7	-	-	-	cpu
+19	gz::sim::v11::RenderUtilPrivate::RemoveRenderingEntities	10	1.4	-	-	-	cpu
+20	gz::sim::v11::RenderUtilPrivate::CreateRenderingEntities	10	2.6	-	-	-	cpu
+21	gz::sim::v11::RenderUtilPrivate::CreateEntitiesRuntime	10	2.4	-	-	-	cpu
+22	gz::sim::v11::EntityComponentManager::FindView	10	2.4	-	-	-	cpu
+23	gz::sim::v11::EntityComponentManager::ClearNewlyCreatedEntities	10	1.0	-	-	-	cpu
+24	gz::sensors::v11::Sensor::Update	10	4.4	-	-	-	cpu
+25	gz::sensors::v11::RenderingSensor::Render	10	3.4	-	-	-	cpu
+26	gz::sensors::v11::Manager::RunOnce	10	4.4	-	-	-	cpu
+27	gz::sensors::v11::GpuLidarSensor::Update	10	4.4	-	-	-	cpu
+28	gz::rendering::v11::Ogre2GpuRays::UpdateRenderTarget1stPass	10	2.9	-	-	-	cpu
+29	gz::rendering::v11::Ogre2GpuRays::Render	10	3.0	-	-	-	cpu
+30	gz::transport::v16::pollSockets	5	0.7	0.1	-	-	cpu,cache
+31	gz::transport::v16::Node::Publisher::Publish	5	0.7	-	-	-	cpu
+32	gz::transport::v16::Discovery<gz::transport::v16::ServicePublisher>::RecvMessages	5	0.6	0.2	-	-	cpu,cache
+33	gz::transport::v16::Discovery<gz::transport::v16::MessagePublisher>::RecvMessages	5	0.6	-	-	-	cpu
+34	gz::sim::v11::systems::SceneBroadcasterPrivate::SceneGraphRemoveEntities	5	0.6	-	-	-	cpu
+35	gz::sim::v11::systems::PhysicsPrivate::CreatePhysicsEntities	5	0.5	-	-	-	cpu
+36	gz::sim::v11::SimulationRunner::PublishStats	5	0.8	-	-	-	cpu
+37	gz::sim::v11::RenderUtilPrivate::UpdateRenderingEntities	5	0.8	-	-	-	cpu
+38	gz::sim::v11::detail::BaseView::ResetNewEntityState	5	0.9	-	-	-	cpu
+39	gz::sensors::v11::Lidar::PublishLidarScan	5	0.8	-	-	-	cpu
+40	gz::rendering::v11::Ogre2Scene::PreRender	5	0.7	-	-	-	cpu

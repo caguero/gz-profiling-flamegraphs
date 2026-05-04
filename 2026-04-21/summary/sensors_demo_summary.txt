@@ -1,0 +1,29 @@
+============================================
+  Unified Profiling Summary: sensors_demo
+============================================
+  Dimensions: cpu,cache
+  CPU total:  81543008108 samples
+  Cache total: 8799203 samples
+
+  Rank Function                                           Score   CPU%  Cache  HITM% Sched Sources
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1	gz::sim::v11::systems::SensorsPrivate::RenderThread	45	8.8	4.7	-	-	cpu,cache
+2	gz::sim::v11::systems::Physics::Update	40	24.0	-	-	-	cpu
+3	gz::sim::v11::systems::PhysicsPrivate::Step	40	21.8	-	-	-	cpu
+4	gz::sim::v11::SimulationRunner::UpdateSystems	40	25.2	-	-	-	cpu
+5	gz::sim::v11::SimulationRunner::Step	40	28.6	-	-	-	cpu
+6	gz::sim::v11::SimulationRunner::Run	40	28.9	-	-	-	cpu
+7	gz::sim::v11::ServerPrivate::Run	40	28.9	-	-	-	cpu
+8	gz::physics::dartsim::SimulationFeatures::WorldForwardStep	40	21.5	-	-	-	cpu
+9	gz::sim::v11::systems::SensorsPrivate::RunOnce	25	8.8	-	-	-	cpu
+10	gz::sensors::v11::Sensor::Update	25	7.3	-	-	-	cpu
+11	gz::sensors::v11::RenderingSensor::Render	25	6.3	-	-	-	cpu
+12	gz::sensors::v11::Manager::RunOnce	25	7.3	-	-	-	cpu
+13	void gz::sim::v11::EntityComponentManager::EachNoCache<gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::ModelTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > >, gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::RecreateTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > > >	10	2.3	-	-	-	cpu
+14	std::pair<std::_Rb_tree_iterator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, bool> std::_Rb_tree<unsigned long, std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> >, std::_Select1st<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > >, std::less<unsigned long>, std::allocator<std::pair<unsigned long const, std::reference_wrapper<gz::math::v10::graph::Vertex<unsigned long> const> > > >::_M_emplace_unique<std::pair<unsigned long, gz::math::v10::graph::Vertex<unsigned long> const&> >	10	1.4	-	-	-	cpu
+15	gz::transport::v16::pollSockets	10	1.1	-	-	-	cpu
+16	gz::sim::v11::systems::Sensors::PostUpdate	10	1.9	-	-	-	cpu
+17	gz::sim::v11::SimulationRunner::ProcessSystemQueue	10	3.5	0.1	-	-	cpu,cache
+18	gz::sim::v11::SimulationRunner::ProcessRecreateEntitiesRemove	10	2.4	-	-	-	cpu
+19	gz::sim::v11::RenderUtil::UpdateFromECM	10	1.6	-	-	-	cpu
+20	gz::sim::v11::EntityComponentManager::FindView	10	1.0	-	-	-	cpu

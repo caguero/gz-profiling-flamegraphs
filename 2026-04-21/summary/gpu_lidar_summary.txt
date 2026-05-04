@@ -1,0 +1,29 @@
+============================================
+  Unified Profiling Summary: gpu_lidar
+============================================
+  Dimensions: cpu,cache
+  CPU total:  54916651223 samples
+  Cache total: 8885623 samples
+
+  Rank Function                                           Score   CPU%  Cache  HITM% Sched Sources
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1	gz::sim::v11::systems::SensorsPrivate::RenderThread	45	5.4	8.1	-	-	cpu,cache
+2	gz::sim::v11::systems::Physics::Update	40	41.2	-	-	-	cpu
+3	gz::sim::v11::systems::PhysicsPrivate::Step	40	36.5	-	-	-	cpu
+4	gz::sim::v11::SimulationRunner::UpdateSystems	40	44.2	-	-	-	cpu
+5	gz::sim::v11::SimulationRunner::Step	40	48.8	-	-	-	cpu
+6	gz::sim::v11::SimulationRunner::Run	40	49.3	-	-	-	cpu
+7	gz::sim::v11::SimulationRunner::ProcessSystemQueue	40	11.9	0.0	-	-	cpu,cache
+8	gz::sim::v11::ServerPrivate::Run	40	49.3	-	-	-	cpu
+9	gz::physics::dartsim::SimulationFeatures::WorldForwardStep	40	35.7	-	-	-	cpu
+10	gz::sim::v11::systems::SensorsPrivate::RunOnce	25	5.4	-	-	-	cpu
+11	gz::sim::v11::systems::Sensors::PostUpdate	25	5.6	-	-	-	cpu
+12	gz::sim::v11::RenderUtil::UpdateFromECM	25	5.2	-	-	-	cpu
+13	gz::sim::v11::Barrier::Wait	25	6.7	-	-	-	cpu
+14	void gz::sim::v11::EntityComponentManager::EachNoCache<gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::ModelTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > >, gz::sim::v11::components::Component<std::add_lvalue_reference<void>, gz::sim::v11::components::RecreateTag, gz::sim::v11::serializers::DefaultSerializer<std::add_lvalue_reference<void> > > >	10	1.5	-	-	-	cpu
+15	gz::sim::v11::systems::SceneBroadcaster::PostUpdate	10	1.6	0.2	-	-	cpu,cache
+16	gz::sim::v11::systems::PhysicsPrivate::UpdateSim	10	2.2	-	-	-	cpu
+17	gz::sim::v11::systems::PhysicsPrivate::UpdatePhysics	10	1.0	-	-	-	cpu
+18	gz::sim::v11::SimulationRunner::ProcessRecreateEntitiesRemove	10	1.7	-	-	-	cpu
+19	gz::sim::v11::RenderUtilPrivate::RemoveRenderingEntities	10	1.4	-	-	-	cpu
+20	gz::sim::v11::RenderUtilPrivate::CreateRenderingEntities	10	2.6	-	-	-	cpu
